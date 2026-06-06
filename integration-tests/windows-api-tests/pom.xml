@@ -69,8 +69,10 @@
             </goals>
             <configuration>
               <functions>
+                <function>CloseHandle</function>
+                <function>CreateFileMappingW</function>
+                <function>CreateFileW</function>
                 <function>CreateUri</function>
-                <function>FormatMessageW</function>
                 <function>FormatMessageW</function>
                 <function>GdipCreateBitmapFromScan0</function>
                 <function>GdipCreatePen1</function>
@@ -93,17 +95,20 @@
                 <function>GetCurrentProcess</function>
                 <function>GetModuleHandleW</function>
                 <function>GetModuleHandleW</function>
+                <function>GetModuleHandleW</function>
                 <function>GetProcessMemoryInfo</function>
                 <function>LocalFree</function>
-                <function>LocalFree</function>
+                <function>MapViewOfFile</function>
                 <function>RegCloseKey</function>
                 <function>RegOpenKeyExW</function>
                 <function>RegQueryValueExW</function>
                 <function>StringFromGUID2</function>
                 <function>SysFreeString</function>
+                <function>UnmapViewOfFile</function>
               </functions>
               <enumerations>
                 <enumeration>FORMAT_MESSAGE_OPTIONS</enumeration>
+                <enumeration>GENERIC_ACCESS_RIGHTS</enumeration>
               </enumerations>
               <constants>
                 <constant>DEVPKEY_Device_FriendlyName</constant>

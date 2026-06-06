@@ -10,3 +10,4 @@ integration-tests/windows-api-tests/mickey.png
 .kotlin
 build
 gradle-plugin-repo/
+sample_file.txt
