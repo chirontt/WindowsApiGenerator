@@ -242,7 +242,7 @@ class ComInterfaceWriter extends FunctionCodeWriterBase<ComInterface> {
             writer.println(" {");
             var invokeString = innerClassName + "$IMPL.HANDLE.invokeExact(vtableFunc(comObject, " + methodIndex + ")," +
                     " comObject";
-            if (method.parameters().length > 0)
+            if (method.parameters().length > 0 || method.supportsLastError() || method.supportsAllocator())
                 invokeString += ", ";
             writeInvoke(method, invokeString, 12);
             writer.println("        }");
@@ -295,7 +295,7 @@ class ComInterfaceWriter extends FunctionCodeWriterBase<ComInterface> {
             writer.print("        ");
             writeFunctionSignatureIntro(method, methodName);
             writer.print("MemorySegment thisObject");
-            if (method.parameters().length > 0)
+            if (method.parameters().length > 0 || method.supportsLastError() || method.supportsAllocator())
                 writer.print(", ");
             writeFunctionSignatureParameters(method);
             writer.println(" {");
@@ -305,11 +305,20 @@ class ComInterfaceWriter extends FunctionCodeWriterBase<ComInterface> {
             writer.print("javaObject.");
             writer.print(methodNames[i]);
             writer.print("(");
-            for (int j = 0; j < method.parameters().length; j++) {
-                if (j > 0)
-                    writer.print(", ");
-                writer.print(getJavaSafeName(method.parameters()[j].name()));
+
+            var supportsAllocator = method.supportsAllocator();
+            var supportsLastError = method.supportsLastError();
+            if (supportsAllocator)
+                writer.print("allocator");
+            if (supportsLastError)
+                writer.printf("%slastErrorState", supportsAllocator ? ", " : "");
+
+            var parameters = method.parameters();
+            for (var j = 0; j < parameters.length; j += 1) {
+                writer.print(j > 0 || supportsAllocator || supportsLastError ? ", " : "");
+                writer.print(getJavaSafeName(parameters[j].name()));
             }
+
             writer.println(");");
             writer.println("        }");
         }
