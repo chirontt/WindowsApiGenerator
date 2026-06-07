@@ -119,6 +119,22 @@ class FunctionCodeWriterBase<T extends Type> extends JavaCodeWriter<T> {
                 %1$stry {
                 %1$s    %2$s%3$s""", indent, returnWithCast, invoke);
 
+        writeInvocationArguments(function);
+        writer.println(");");
+
+        writer.printf("""
+                %1$s} catch (Throwable ex) {
+                %1$s    throw new RuntimeException(ex);
+                %1$s}
+                """, indent);
+    }
+
+    /**
+     * Writes the Java invocation arguments for the given function (without opening parenthesis).
+     *
+     * @param function the function
+     */
+    protected void writeInvocationArguments(Method function) {
         var supportsAllocator = function.supportsAllocator();
         var supportsLastError = function.supportsLastError();
         if (supportsAllocator)
@@ -131,12 +147,9 @@ class FunctionCodeWriterBase<T extends Type> extends JavaCodeWriter<T> {
             writer.print(i > 0 || supportsAllocator || supportsLastError ? ", " : "");
             writer.print(getJavaSafeName(parameters[i].name()));
         }
-        writer.println(");");
+    }
 
-        writer.printf("""
-                %1$s} catch (Throwable ex) {
-                %1$s    throw new RuntimeException(ex);
-                %1$s}
-                """, indent);
+    protected boolean hasParameters(Method method) {
+        return method.parameters().length > 0 || method.supportsLastError() || method.supportsAllocator();
     }
 }

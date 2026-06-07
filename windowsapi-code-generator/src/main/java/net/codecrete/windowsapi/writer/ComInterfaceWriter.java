@@ -242,7 +242,7 @@ class ComInterfaceWriter extends FunctionCodeWriterBase<ComInterface> {
             writer.println(" {");
             var invokeString = innerClassName + "$IMPL.HANDLE.invokeExact(vtableFunc(comObject, " + methodIndex + ")," +
                     " comObject";
-            if (method.parameters().length > 0 || method.supportsLastError() || method.supportsAllocator())
+            if (hasParameters(method))
                 invokeString += ", ";
             writeInvoke(method, invokeString, 12);
             writer.println("        }");
@@ -295,30 +295,15 @@ class ComInterfaceWriter extends FunctionCodeWriterBase<ComInterface> {
             writer.print("        ");
             writeFunctionSignatureIntro(method, methodName);
             writer.print("MemorySegment thisObject");
-            if (method.parameters().length > 0 || method.supportsLastError() || method.supportsAllocator())
+            if (hasParameters(method))
                 writer.print(", ");
             writeFunctionSignatureParameters(method);
             writer.println(" {");
             writer.print("            ");
             if (method.hasReturnType())
                 writer.print("return ");
-            writer.print("javaObject.");
-            writer.print(methodNames[i]);
-            writer.print("(");
-
-            var supportsAllocator = method.supportsAllocator();
-            var supportsLastError = method.supportsLastError();
-            if (supportsAllocator)
-                writer.print("allocator");
-            if (supportsLastError)
-                writer.printf("%slastErrorState", supportsAllocator ? ", " : "");
-
-            var parameters = method.parameters();
-            for (var j = 0; j < parameters.length; j += 1) {
-                writer.print(j > 0 || supportsAllocator || supportsLastError ? ", " : "");
-                writer.print(getJavaSafeName(parameters[j].name()));
-            }
-
+            writer.printf("javaObject.%s(", methodNames[i]);
+            writeInvocationArguments(method);
             writer.println(");");
             writer.println("        }");
         }
