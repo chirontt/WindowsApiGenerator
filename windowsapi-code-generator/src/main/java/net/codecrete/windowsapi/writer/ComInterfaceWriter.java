@@ -212,6 +212,8 @@ class ComInterfaceWriter extends FunctionCodeWriterBase<ComInterface> {
                 
                 """, className, extendsSuperClass);
 
+        writeTraceDowncallHeader("        ");
+
         if (implementedInterface != null) {
             writer.printf("""
                             protected $DOWNCALL(MemorySegment comObject) {

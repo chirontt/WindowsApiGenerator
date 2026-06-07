@@ -85,8 +85,9 @@ class CallbackFunctionCodeWriter extends FunctionCodeWriterBase<Delegate> {
         writer.println();
 
         // invoke the function pointer
+        writeTraceDowncallHeader("    ");
         writeCallbackFunctionInvokeComment(signature);
-        var optionalComma = signature.parameters().length > 0 ? ", " : "";
+        var optionalComma = hasParameters(signature) ? ", " : "";
         writer.print("    public static ");
         writeFunctionSignatureIntro(signature, "invoke");
         writer.print("MemorySegment callbackFunction" + optionalComma);

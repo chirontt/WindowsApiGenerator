@@ -93,6 +93,8 @@ class FunctionCodeWriter extends FunctionCodeWriterBase<Type> {
 
         writer.println();
 
+        writeTraceDowncallHeader("    ");
+
         for (var method : functions)
             writeFunction(method);
 

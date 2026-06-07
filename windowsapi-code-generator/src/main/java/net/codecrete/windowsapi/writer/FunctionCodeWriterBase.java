@@ -117,6 +117,15 @@ class FunctionCodeWriterBase<T extends Type> extends JavaCodeWriter<T> {
 
         writer.printf("""
                 %1$stry {
+                %1$s    if (TRACE_DOWNCALLS) {
+                %1$s        traceDowncall("%2$s\"""", indent, function.name());
+        writer.print(hasParameters(function) ? ", " : "");
+
+        writeInvocationArguments(function);
+        writer.println(");");
+
+        writer.printf("""
+                %1$s    }
                 %1$s    %2$s%3$s""", indent, returnWithCast, invoke);
 
         writeInvocationArguments(function);
@@ -151,5 +160,19 @@ class FunctionCodeWriterBase<T extends Type> extends JavaCodeWriter<T> {
 
     protected boolean hasParameters(Method method) {
         return method.parameters().length > 0 || method.supportsLastError() || method.supportsAllocator();
+    }
+
+    protected void writeTraceDowncallHeader(String indent) {
+        writer.printf("""
+            %1$sprivate static final boolean TRACE_DOWNCALLS = Boolean.getBoolean("windowsapi.trace.downcalls");
+
+            %1$sprivate static void traceDowncall(String name, Object... args) {
+            %1$s    var traceArgs = java.util.Arrays.stream(args)
+            %1$s            .map(Object::toString)
+            %1$s            .collect(java.util.stream.Collectors.joining(", "));
+            %1$s    System.out.printf("%%s(%%s)%%n", name, traceArgs);
+            %1$s}
+
+            """, indent);
     }
 }
