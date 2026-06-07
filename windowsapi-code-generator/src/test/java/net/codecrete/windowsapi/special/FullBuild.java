@@ -30,6 +30,7 @@ public class FullBuild {
         if (!ouputDirectoryFile.exists())
             ouputDirectoryFile.mkdirs();
         var codeWriter = new CodeWriter(metadata, outputDirectory, new SimpleEventListener());
+        codeWriter.setGenerateDowncallTracing(false);
         codeWriter.writeAll();
     }
 }

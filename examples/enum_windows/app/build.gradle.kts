@@ -23,6 +23,7 @@ tasks.generateWindowsApi {
         "GetModuleHandleW",
         "LocalFree"
     )
+    downcallTracing = false
 }
 
 tasks.compileKotlin {

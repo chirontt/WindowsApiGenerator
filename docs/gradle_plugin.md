@@ -54,6 +54,7 @@ additional generator tasks by creating instance of the `WindowsApiTask` class (i
 | `constants`         | `ListProperty<String>` | A list of Windows API constant names to generate bindings for.                                                                                                                                                                                 |
 | `outputDirectory`   | `DirectoryProperty`    | The output directory for the generated Java code. Defaults to `generated/windowsapi` relative to the project's build directory.                                                                                                                |
 | `basePackage`       | `Property<String>`     | The base package for the generated Java classes. It is prepended to the package name derived from the namespace assigned by Microsoft, e.g. `windows.win32.ui.shell`. The default is an empty string, i.e., no additional names are prepended. |
+| `downcallTracing`   | `Property<Boolean>`    | Controls if additional code is generated to trace FFM downcalls. If set to `true` and if the system property `windowsapi.trace.downcalls` is set `true`, the generated code will output the function name and parameters before each downcall. If set to `false`, no additional code will be generated and the system property has no effect. |
 
 The properties `functions`, `structs`, `enumerations`, `callbackFunctions`, `comInterfaces` and `constants` determine the scope of Windows API elements to generate code.
 

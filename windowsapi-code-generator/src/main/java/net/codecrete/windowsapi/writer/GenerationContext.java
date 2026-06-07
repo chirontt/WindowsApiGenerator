@@ -25,6 +25,7 @@ class GenerationContext {
     protected Function<Path, PrintWriter> writerFactory;
     protected final EventListener eventListener;
     protected String basePackage = "";
+    protected boolean downcallTracing = false;
 
     /**
      * Creates a new instance.
@@ -71,6 +72,25 @@ class GenerationContext {
      */
     void setBasePackage(String basePackage) {
         this.basePackage = basePackage;
+    }
+
+
+    /**
+     * Indicates if the downcall tracing code is generated.
+     *
+     * @return {@code true} if it is generated, {@code false} otherwise.
+     */
+    boolean generateDowncallTracing() {
+        return downcallTracing;
+    }
+
+    /**
+     * Sets if the downcall tracing code is generated.
+     *
+     * @param downcallTracing  {@code true} if it is generated, {@code false} otherwise.
+     */
+    void setGenerateDowncallTracing(boolean downcallTracing) {
+        this.downcallTracing = downcallTracing;
     }
 
     /**

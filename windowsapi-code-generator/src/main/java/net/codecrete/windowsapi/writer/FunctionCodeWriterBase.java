@@ -117,16 +117,21 @@ class FunctionCodeWriterBase<T extends Type> extends JavaCodeWriter<T> {
 
         writer.printf("""
                 %1$stry {
+                """, indent);
+
+        if (generationContext().generateDowncallTracing()) {
+            writer.printf("""
                 %1$s    if (TRACE_DOWNCALLS) {
                 %1$s        traceDowncall("%2$s\"""", indent, function.name());
-        writer.print(hasParameters(function) ? ", " : "");
+            writer.print(hasParameters(function) ? ", " : "");
+            writeInvocationArguments(function);
+            writer.println(");");
+            writer.printf("""
+                    %1$s    }
+                    """, indent);
+        }
 
-        writeInvocationArguments(function);
-        writer.println(");");
-
-        writer.printf("""
-                %1$s    }
-                %1$s    %2$s%3$s""", indent, returnWithCast, invoke);
+        writer.printf("%1$s    %2$s%3$s", indent, returnWithCast, invoke);
 
         writeInvocationArguments(function);
         writer.println(");");
@@ -163,6 +168,9 @@ class FunctionCodeWriterBase<T extends Type> extends JavaCodeWriter<T> {
     }
 
     protected void writeTraceDowncallHeader(String indent) {
+        if (!generationContext().generateDowncallTracing())
+            return;
+
         writer.printf("""
             %1$sprivate static final boolean TRACE_DOWNCALLS = Boolean.getBoolean("windowsapi.trace.downcalls");
 

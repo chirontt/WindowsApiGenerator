@@ -116,6 +116,15 @@ public class CodeWriter extends JavaCodeWriter<Type> {
     }
 
     /**
+     * Sets if the downcall tracing code is generated.
+     *
+     * @param downcallTracing  {@code true} if it is generated, {@code false} otherwise.
+     */
+    public void setGenerateDowncallTracing(boolean downcallTracing) {
+        generationContext().setGenerateDowncallTracing(downcallTracing);
+    }
+
+    /**
      * Sets if this code writer should execute a dry run without creating files and directories.
      * <p>
      * Initially, it is set to {@code false}.

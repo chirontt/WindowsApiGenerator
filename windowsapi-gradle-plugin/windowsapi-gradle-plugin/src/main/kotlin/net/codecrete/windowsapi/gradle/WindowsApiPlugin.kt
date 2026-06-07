@@ -33,6 +33,7 @@ class WindowsApiPlugin : Plugin<Project> {
                 task.description = "Generates Windows API bindings"
                 task.outputDirectory.set(outputDirectory)
                 task.basePackage.convention("")
+                task.downcallTracing.convention(false)
             }
 
             // create a dependency of the Java compile task on the Windows API generation

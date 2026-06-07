@@ -85,6 +85,17 @@ abstract class WindowsApiTask : DefaultTask() {
     @get:Optional
     abstract val basePackage: Property<String>
 
+    /**
+     * Controls if additional code is generated to trace FFM downcalls.
+     *
+     * If set to `true` and if the system property `windowsapi.trace.downcalls` is set `true`,
+     * the generated code will output the function name and parameters before each downcall.
+     * If set to `false`, no additional code will be generated and the system property has no effect.
+     */
+    @get:Input
+    @get:Optional
+    abstract val downcallTracing: Property<Boolean>
+
     @TaskAction
     fun generateCode() {
         val run = WindowsApiRun()
@@ -98,6 +109,7 @@ abstract class WindowsApiTask : DefaultTask() {
         run.constants.addAll(constants.get())
         run.outputDirectory = outputDirectory.get().asFile.toPath()
         run.basePackage = basePackage.get()
+        run.downcallTracing = downcallTracing.get()
 
         try {
             run.generateCode()

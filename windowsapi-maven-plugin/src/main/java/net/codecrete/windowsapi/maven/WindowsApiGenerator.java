@@ -109,6 +109,17 @@ public class WindowsApiGenerator extends AbstractMojo {
     String basePackage;
 
     /**
+     * Controls if additional code is generated to trace FFM downcalls.
+     * <p>
+     * If set to {@code true} and if the system property {@code windowsapi.trace.downcalls} is set {@code true},
+     * the generated code will output the function name and parameters before each downcall.
+     * If set to {@code false}, no additional code will be generated and the system property has no effect.
+     * </p>
+     */
+    @Parameter(name = "downcallTracing")
+    boolean downcallTracing;
+
+    /**
      * If set to {@code true}, adds the source directory as a source root
      * so the generated code will be compiled and included in the resulting artifact.
      */
@@ -165,6 +176,7 @@ public class WindowsApiGenerator extends AbstractMojo {
 
         run.setOutputDirectory(sourceFolder);
         run.setBasePackage(basePackage != null ? basePackage : "");
+        run.setDowncallTracing(downcallTracing);
         return run;
     }
 }

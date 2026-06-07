@@ -42,6 +42,7 @@
               <constants>
                 <constant>TaskbarList</constant>
               </constants>
+              <downcallTracing>false</downcallTracing>
             </configuration>
           </execution>
         </executions>

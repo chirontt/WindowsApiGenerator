@@ -43,6 +43,7 @@ public class WindowsApiRun {
     private Path outputDirectory;
     private String basePackage = "";
     private EventListener eventListener = new NullEventListener();
+    private boolean downcallTracing = false;
 
     private Set<String> structs = new HashSet<>();
     private Set<String> functions = new HashSet<>();
@@ -111,6 +112,34 @@ public class WindowsApiRun {
      */
     public void setBasePackage(String basePackage) {
         this.basePackage = basePackage;
+    }
+
+    /**
+     * Controls if additional code is generated for tracing downcalls.
+     * <p>
+     * The generated call will print the function name and parameters before each FFM downcall
+     * if the system property {@code windowsapi.trace.downcalls} is set to {@code true}.
+     * The default is {@code false}, i.e. the additional code is not generated and the
+     * system property has no effect.
+     * </p>
+     * @return {@code true} if the code is generated, {@code false} otherwise
+     */
+    public boolean getDowncallTracing() {
+        return downcallTracing;
+    }
+
+    /**
+     * Controls if additional code is generated for tracing downcalls.
+     * <p>
+     * The generated call will print the function name and parameters before each FFM downcall
+     * if the system property {@code windowsapi.trace.downcalls} is set to {@code true}.
+     * The default is {@code false}, i.e. the additional code is not generated and the
+     * system property has no effect.
+     * </p>
+     * @param downcallTracing {@code true} if the code is generated, {@code false} otherwise
+     */
+    public void setDowncallTracing(boolean downcallTracing) {
+        this.downcallTracing = downcallTracing;
     }
 
     /**
@@ -288,6 +317,7 @@ public class WindowsApiRun {
         var writer = new CodeWriter(metadata, outputDirectory, eventListener);
         writer.setDryRun(isDryRun);
         writer.setBasePackage(basePackage);
+        writer.setGenerateDowncallTracing(downcallTracing);
         writer.write(scope);
 
         var generatedFiles = writer.getGeneratedFiles();
