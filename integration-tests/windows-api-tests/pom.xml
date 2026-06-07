@@ -17,8 +17,8 @@
     <maven.compiler.target>25</maven.compiler.target>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 
-    <assertj.version>3.27.3</assertj.version>
-    <junit.version>5.12.0</junit.version>
+    <assertj.version>3.27.7</assertj.version>
+    <junit.version>6.1.0</junit.version>
     <maven-core.version>3.9.9</maven-core.version>
     <maven-compiler-plugin.version>3.14.0</maven-compiler-plugin.version>
     <maven-surefire-plugin.version>3.5.2</maven-surefire-plugin.version>
@@ -73,6 +73,7 @@
                 <function>CreateFileMappingW</function>
                 <function>CreateFileW</function>
                 <function>CreateUri</function>
+                <function>D2D1ConvertColorSpace</function>
                 <function>FormatMessageW</function>
                 <function>GdipCreateBitmapFromScan0</function>
                 <function>GdipCreatePen1</function>

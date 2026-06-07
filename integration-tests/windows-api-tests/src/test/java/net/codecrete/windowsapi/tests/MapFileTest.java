@@ -1,3 +1,9 @@
+//
+// Windows API Generator for Java
+// Copyright (c) 2026 Manuel Bleichenbacher
+// Licensed under MIT License
+// https://opensource.org/licenses/MIT
+//
 package net.codecrete.windowsapi.tests;
 
 import org.junit.jupiter.api.Test;
