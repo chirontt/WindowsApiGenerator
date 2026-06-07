@@ -13,6 +13,7 @@ import net.codecrete.windowsapi.metadata.Type;
 import net.codecrete.windowsapi.metadata.TypeAlias;
 
 import java.util.Collection;
+import java.util.Comparator;
 import java.util.Objects;
 
 /**
@@ -42,7 +43,8 @@ class FunctionCodeWriter extends FunctionCodeWriterBase<Type> {
      * @param functions functions to write
      */
     void writeFunctions(Namespace namespace, Collection<Method> functions) {
-        withFile(namespace, null, "Apis", () -> writeFunctionsContent(functions));
+        var sortedFunctions = functions.stream().sorted(Comparator.comparing(Method::name)).toList();
+        withFile(namespace, null, "Apis", () -> writeFunctionsContent(sortedFunctions));
     }
 
     void writeFunctionsContent(Collection<Method> functions) {

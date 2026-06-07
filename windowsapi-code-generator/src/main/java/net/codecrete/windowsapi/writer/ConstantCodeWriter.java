@@ -13,10 +13,7 @@ import net.codecrete.windowsapi.metadata.Type;
 
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
-import java.util.Arrays;
-import java.util.Collection;
-import java.util.Set;
-import java.util.UUID;
+import java.util.*;
 
 /**
  * Creates the Java code for constants.
@@ -41,7 +38,8 @@ class ConstantCodeWriter extends JavaCodeWriter<Type> {
      * @param constants the constants
      */
     void writeConstants(Namespace namespace, Collection<ConstantValue> constants) {
-        withFile(namespace, null, "Constants", () -> writeConstantsContent(constants));
+        var sortedConstants = constants.stream().sorted(Comparator.comparing(ConstantValue::name)).toList();
+        withFile(namespace, null, "Constants", () -> writeConstantsContent(sortedConstants));
     }
 
     void writeConstantsContent(Collection<ConstantValue> constants) {
