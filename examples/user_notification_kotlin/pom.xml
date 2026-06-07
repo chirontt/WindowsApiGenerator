@@ -114,8 +114,8 @@
                 <enumeration>NOTIFY_ICON_INFOTIP_FLAGS</enumeration>
               </enumerations>
               <constants>
-                <constant>E_INVALIDARG</constant>
                 <constant>E_NOINTERFACE</constant>
+                <constant>E_POINTER</constant>
                 <constant>S_FALSE</constant>
                 <constant>S_OK</constant>
                 <constant>UserNotification</constant>

@@ -12,8 +12,8 @@ import java.lang.foreign.MemorySegment;
 
 import static java.lang.foreign.ValueLayout.ADDRESS;
 import static java.lang.foreign.ValueLayout.JAVA_LONG;
-import static windows.win32.foundation.Constants.E_INVALIDARG;
 import static windows.win32.foundation.Constants.E_NOINTERFACE;
+import static windows.win32.foundation.Constants.E_POINTER;
 
 /**
  * Base class for COM objects implemented in Kotlin.
@@ -74,7 +74,7 @@ public class ComObject implements IUnknown {
     @Override
     public int QueryInterface(MemorySegment riid, MemorySegment ppvObject) {
         if (ppvObject.address() == 0L)
-            return E_INVALIDARG;
+            return E_POINTER;
 
         for (var iid : implementedIIDs) {
             if (equalIIDs(iid, riid)) {

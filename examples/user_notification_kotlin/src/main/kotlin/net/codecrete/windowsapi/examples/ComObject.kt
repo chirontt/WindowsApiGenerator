@@ -6,8 +6,8 @@
 //
 package net.codecrete.windowsapi.examples
 
-import windows.win32.foundation.Constants.E_INVALIDARG
 import windows.win32.foundation.Constants.E_NOINTERFACE
+import windows.win32.foundation.Constants.E_POINTER
 import windows.win32.system.com.IUnknown
 import java.lang.foreign.MemorySegment
 import java.lang.foreign.ValueLayout.ADDRESS
@@ -44,7 +44,7 @@ open class ComObject(protected val implementedIIDs: Array<MemorySegment>) : IUnk
         ppvObject: MemorySegment
     ): Int {
         if (ppvObject.address() == 0L)
-            return E_INVALIDARG
+            return E_POINTER
 
         if (implementedIIDs.any { equalIIDs(it, riid) }) {
             ppvObject.set(ADDRESS, 0, thisPointer)
