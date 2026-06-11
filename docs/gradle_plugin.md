@@ -10,14 +10,14 @@ To use the Java plugin, include the following in your build script:
 **Groovy**
 ```groovy
 plugins {
-    id "net.codecrete.windows-api" version "0.8.4"
+    id "net.codecrete.windows-api" version "0.8.5"
 }
 ```
 
 **Kotlin**
 ```kotlin
 plugins {
-    id("net.codecrete.windows-api") version "0.8.4"
+    id("net.codecrete.windows-api") version "0.8.5"
 }
 ```
 
