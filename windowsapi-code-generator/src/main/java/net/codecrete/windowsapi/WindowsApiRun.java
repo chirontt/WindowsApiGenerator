@@ -10,8 +10,11 @@ import net.codecrete.windowsapi.events.Event;
 import net.codecrete.windowsapi.events.EventListener;
 import net.codecrete.windowsapi.winmd.MetadataBuilder;
 import net.codecrete.windowsapi.writer.CodeWriter;
+import net.codecrete.windowsapi.writer.FileSink;
 import net.codecrete.windowsapi.writer.GenerationException;
+import net.codecrete.windowsapi.writer.NullSink;
 import net.codecrete.windowsapi.writer.Scope;
+import net.codecrete.windowsapi.writer.SourceFileSink;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -314,15 +317,15 @@ public class WindowsApiRun {
 
         scope.buildTransitiveScope();
 
-        var writer = new CodeWriter(metadata, outputDirectory, eventListener);
-        writer.setDryRun(isDryRun);
+        var fileSink = isDryRun ? null : new FileSink(outputDirectory);
+        SourceFileSink sink = fileSink != null ? fileSink : new NullSink();
+        var writer = new CodeWriter(metadata, sink, eventListener);
         writer.setBasePackage(basePackage);
         writer.setGenerateDowncallTracing(downcallTracing);
         writer.write(scope);
 
-        var generatedFiles = writer.getGeneratedFiles();
-        if (generatedFiles != null)
-            deleteOldFiles(generatedFiles);
+        if (fileSink != null)
+            deleteOldFiles(fileSink.generatedPaths());
     }
 
     private boolean isAnyWork() {

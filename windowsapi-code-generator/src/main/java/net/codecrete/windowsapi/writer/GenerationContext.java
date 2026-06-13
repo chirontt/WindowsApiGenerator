@@ -12,7 +12,6 @@ import net.codecrete.windowsapi.metadata.Metadata;
 
 import java.io.PrintWriter;
 import java.nio.file.Path;
-import java.util.function.Function;
 
 /**
  * Code generation context.
@@ -22,7 +21,7 @@ import java.util.function.Function;
  */
 class GenerationContext {
     final Metadata metadata;
-    protected Function<Path, PrintWriter> writerFactory;
+    protected final SourceFileSink sink;
     protected final EventListener eventListener;
     protected String basePackage = "";
     protected boolean downcallTracing = false;
@@ -31,10 +30,12 @@ class GenerationContext {
      * Creates a new instance.
      *
      * @param metadata      the metadata
+     * @param sink          the destination for the generated source files
      * @param eventListener the event listener
      */
-    GenerationContext(Metadata metadata, EventListener eventListener) {
+    GenerationContext(Metadata metadata, SourceFileSink sink, EventListener eventListener) {
         this.metadata = metadata;
+        this.sink = sink;
         this.eventListener = eventListener;
     }
 
@@ -94,25 +95,12 @@ class GenerationContext {
     }
 
     /**
-     * Sets the writer factory.
-     * <p>
-     * The writer factory takes a relative file name, creates a file relative to the
-     * output directory and returns a writer to write to the file.
-     * </p>
-     *
-     * @param writerFactory the writer factory
-     */
-    void setWriterFactory(Function<Path, PrintWriter> writerFactory) {
-        this.writerFactory = writerFactory;
-    }
-
-    /**
      * Creates a new print writer for the specified relative path.
      *
      * @param path the path
      * @return the new print writer instance
      */
     PrintWriter createWriter(Path path) {
-        return writerFactory.apply(path);
+        return sink.open(path);
     }
 }

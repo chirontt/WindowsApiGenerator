@@ -14,92 +14,39 @@ import net.codecrete.windowsapi.metadata.Metadata;
 import net.codecrete.windowsapi.metadata.Struct;
 import net.codecrete.windowsapi.metadata.Type;
 
-import java.io.FileWriter;
-import java.io.IOException;
-import java.io.OutputStream;
-import java.io.PrintWriter;
-import java.io.UncheckedIOException;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.util.HashSet;
-import java.util.Set;
-
 /**
  * Generates Java code for a given scope of types, functions, and constants.
+ * <p>
+ * The generated source files are handed to a {@link SourceFileSink}, which decides
+ * whether they are written to disk ({@link FileSink}), discarded ({@link NullSink}),
+ * or captured in memory ({@link CapturingSink}).
+ * </p>
  */
 public class CodeWriter extends JavaCodeWriter<Type> {
 
-    private final Path outputDirectory;
     private final StructCodeWriter structCodeWriter;
     private final EnumCodeWriter enumCodeWriter;
     private final FunctionCodeWriter functionCodeWriter;
     private final CallbackFunctionCodeWriter callbackFunctionCodeWriter;
     private final ConstantCodeWriter constantCodeWriter;
     private final ComInterfaceWriter comInterfaceWriter;
-    private Set<Path> generatedFiles;
-    private boolean isDryRun;
 
     /**
      * Creates a new instance.
      *
-     * @param metadata        the metadata
-     * @param outputDirectory the output directory
-     * @param eventListener   the event listener to notify about events
+     * @param metadata      the metadata
+     * @param sink          the destination for the generated source files
+     * @param eventListener the event listener to notify about events
      */
-    public CodeWriter(Metadata metadata, Path outputDirectory, EventListener eventListener) {
-        super(new GenerationContext(metadata, eventListener));
-        generationContext().setWriterFactory(this::createFileWriter);
+    public CodeWriter(Metadata metadata, SourceFileSink sink, EventListener eventListener) {
+        super(new GenerationContext(metadata, sink, eventListener));
 
-        this.outputDirectory = outputDirectory;
         structCodeWriter = new StructCodeWriter(generationContext());
         enumCodeWriter = new EnumCodeWriter(generationContext());
         functionCodeWriter = new FunctionCodeWriter(generationContext());
         callbackFunctionCodeWriter = new CallbackFunctionCodeWriter(generationContext());
         constantCodeWriter = new ConstantCodeWriter(generationContext());
         comInterfaceWriter = new ComInterfaceWriter(generationContext());
-        isDryRun = false;
-
-        if (Files.notExists(outputDirectory))
-            throw new IllegalArgumentException("Output directory does not exist: " + outputDirectory);
-    }
-
-    private PrintWriter createFileWriter(Path path) {
-        var fullPath = outputDirectory.resolve(path);
-        if (generatedFiles != null)
-            generatedFiles.add(path);
-
-        try {
-            // create the directory if needed
-            var directory = fullPath.getParent().toFile();
-            if (!directory.exists()) {
-                var success = directory.mkdirs();
-                if (!success)
-                    throw new GenerationException("Unable to create directory " + directory);
-            }
-
-            // create the file
-            var file = fullPath.toFile();
-            return new PrintWriter(new FileWriter(file, StandardCharsets.UTF_8));
-
-        } catch (IOException exception) {
-            throw new UncheckedIOException("Failed to write Java file " + path, exception);
-        }
-    }
-
-    private static PrintWriter createNullWriter(Path path) {
-        return new PrintWriter(OutputStream.nullOutputStream());
-    }
-
-    /**
-     * Gets the generated files (set of {@code Path} instances).
-     * <p>
-     * The path is relative to the output directory.
-     * </p>
-     * @return generated files, or {@code null} for dry runs
-     */
-    public Set<Path> getGeneratedFiles() {
-        return generatedFiles;
     }
 
     /**
@@ -125,26 +72,11 @@ public class CodeWriter extends JavaCodeWriter<Type> {
     }
 
     /**
-     * Sets if this code writer should execute a dry run without creating files and directories.
-     * <p>
-     * Initially, it is set to {@code false}.
-     * </p>
-     *
-     * @param isDryRun {@code true} for dry run, {@code false} for real run
-     */
-    public void setDryRun(boolean isDryRun) {
-        this.isDryRun = isDryRun;
-        generationContext.setWriterFactory(isDryRun ? CodeWriter::createNullWriter : this::createFileWriter);
-    }
-
-    /**
      * Writes the Java code for the specified scope of types, functions, and constants.
      *
      * @param scope the scope
      */
     public void write(Scope scope) {
-        if (!isDryRun)
-            generatedFiles = new HashSet<>();
         scope.getTransitiveTypeScope().forEach(this::writeType);
         scope.getFunctions().forEach(functionCodeWriter::writeFunctions);
         scope.getConstants().forEach(constantCodeWriter::writeConstants);

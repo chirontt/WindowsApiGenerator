@@ -10,6 +10,7 @@ import net.codecrete.windowsapi.SimpleEventListener;
 import net.codecrete.windowsapi.metadata.Metadata;
 import net.codecrete.windowsapi.winmd.MetadataBuilder;
 import net.codecrete.windowsapi.writer.CodeWriter;
+import net.codecrete.windowsapi.writer.FileSink;
 
 import java.nio.file.Path;
 
@@ -31,11 +32,11 @@ public class FullBuild {
         var ouputDirectoryFile = outputDirectory.toFile();
         if (!ouputDirectoryFile.exists())
             ouputDirectoryFile.mkdirs();
-        var codeWriter = new CodeWriter(metadata, outputDirectory, new SimpleEventListener());
+        var codeWriter = new CodeWriter(metadata, new FileSink(outputDirectory), new SimpleEventListener());
         codeWriter.setGenerateDowncallTracing(false);
         codeWriter.writeAll();
 
-        var elapsedMillis = (System.nanoTime() - startTime) / 1_000_000;
-        System.out.printf("Full build completed in %,d ms%n", elapsedMillis);
+        var elapsedMillis = (System.nanoTime() - startTime) / 1_000_000_000.0;
+        System.out.printf("Full build completed in %fs%n", elapsedMillis);
     }
 }
