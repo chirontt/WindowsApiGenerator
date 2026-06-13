@@ -56,9 +56,9 @@ The seam between deciding what Java source to emit and where the bytes go
 
 ## Example dialogue
 
-> **Dev:** "Does `StructLayouter` need the **winmd** file to compute field offsets?"
-> **Author:** "No — it only needs field-layout rows. Give it a **MetadataSource** and it
-> works against a fake just as well as against a real **WinmdReader**."
+> **Dev:** "Does `StructLayouter` need a **MetadataSource** to compute field offsets?"
+> **Author:** "No — it's a pure function of the type model. Hand it a **Struct** with its
+> members and it computes offsets, padding, and size; no winmd, no source, no fake."
 
 ## Flagged ambiguities
 

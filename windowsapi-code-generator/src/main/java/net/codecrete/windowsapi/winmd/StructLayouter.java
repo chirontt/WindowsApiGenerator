@@ -36,17 +36,6 @@ class StructLayouter {
             "KSSTREAMALLOCATOR_STATUS_EX"
     );
 
-    private final MetadataSource metadataSource;
-
-    /**
-     * Creates a new instance.
-     *
-     * @param metadataSource the metadata source to get additional information from
-     */
-    StructLayouter(MetadataSource metadataSource) {
-        this.metadataSource = metadataSource;
-    }
-
     /**
      * Calculates the size and offset of this struct and its fields.
      * <p>
@@ -94,8 +83,6 @@ class StructLayouter {
         Member previousMember = null;
 
         for (var member : struct.members()) {
-            var fieldLayout = metadataSource.getFieldLayout(member.fieldIndex());
-            assert fieldLayout.offset() == 0;
             ensureLayoutDone(member.type());
             state.overlay(member.type());
             previousMember = member;

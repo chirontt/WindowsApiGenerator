@@ -291,6 +291,11 @@ public class MetadataBuilder implements TypeLookup {
                     adjustArraySizes(array, name, parentType);
                 }
             }
+            if (parentType != null && parentType.isUnion()) {
+                // union members are laid out at offset 0 (see StructLayouter.layoutUnion); guard the winmd agrees
+                var fieldLayout = metadataSource.getFieldLayout(field.index());
+                assert fieldLayout.offset() == 0;
+            }
             var member = new Member(name, field.index(), fieldType, value);
             fields.add(member);
         }
@@ -343,7 +348,7 @@ public class MetadataBuilder implements TypeLookup {
      * Calculates the layouts of all types
      */
     private void calculateTypeLayout() {
-        var calculator = new StructLayouter(metadataSource);
+        var calculator = new StructLayouter();
         metadata.types().forEach(type -> {
             if (type instanceof Struct struct)
                 calculator.layout(struct);
