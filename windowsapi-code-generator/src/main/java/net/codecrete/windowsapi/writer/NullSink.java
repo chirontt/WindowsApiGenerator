@@ -18,6 +18,13 @@ import java.nio.file.Path;
  */
 public class NullSink implements SourceFileSink {
 
+    /**
+     * Creates a new instance.
+     */
+    public NullSink() {
+        // explicit constructor for Javadoc comment
+    }
+
     @Override
     public PrintWriter open(Path path) {
         return new PrintWriter(OutputStream.nullOutputStream());

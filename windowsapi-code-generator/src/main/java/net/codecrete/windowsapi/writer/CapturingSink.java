@@ -25,6 +25,13 @@ public class CapturingSink implements SourceFileSink {
 
     private final Map<Path, StringWriter> files = new LinkedHashMap<>();
 
+    /**
+     * Creates a new instance.
+     */
+    public CapturingSink() {
+        // explicit constructor for Javadoc comment
+    }
+
     @Override
     public PrintWriter open(Path path) {
         var stringWriter = new StringWriter();
