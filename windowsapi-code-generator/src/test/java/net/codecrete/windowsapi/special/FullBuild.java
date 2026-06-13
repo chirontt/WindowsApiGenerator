@@ -24,6 +24,8 @@ public class FullBuild {
 
         var outputDirectory = Path.of(args[0]);
 
+        var startTime = System.nanoTime();
+
         Metadata metadata = MetadataBuilder.load();
 
         var ouputDirectoryFile = outputDirectory.toFile();
@@ -32,5 +34,8 @@ public class FullBuild {
         var codeWriter = new CodeWriter(metadata, outputDirectory, new SimpleEventListener());
         codeWriter.setGenerateDowncallTracing(false);
         codeWriter.writeAll();
+
+        var elapsedMillis = (System.nanoTime() - startTime) / 1_000_000;
+        System.out.printf("Full build completed in %,d ms%n", elapsedMillis);
     }
 }
