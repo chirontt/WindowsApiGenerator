@@ -13,30 +13,31 @@ import java.io.IOException;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-class MetadataFileTest {
-    MetadataFile metadataFile;
+class WinmdReaderTest {
+    WinmdReader reader;
 
     @BeforeEach
     void setUp() throws IOException {
         try (var stream = MetadataBuilder.class.getClassLoader().getResourceAsStream("Windows.Win32.winmd")) {
-            metadataFile = new MetadataFile(stream);
+            reader = new WinmdReader(stream);
         }
     }
 
     @Test
     void readHeader() {
-        assertThat(metadataFile.getVersion()).isEqualTo("v4.0.30319");
+        assertThat(reader.getVersion()).isEqualTo("v4.0.30319");
 
-        assertThat(metadataFile.getStreams()).extracting(MetadataFile.MetadataStream::name)
+        assertThat(reader.getStreams()).extracting(WinmdReader.MetadataStream::name)
                 .containsExactlyInAnyOrder("#GUID", "#~", "#US", "#Strings", "#Blob");
 
-        assertThat(metadataFile.getStreams()).extracting(MetadataFile.MetadataStream::offset).isSorted();
+        assertThat(reader.getStreams()).extracting(WinmdReader.MetadataStream::offset).isSorted();
     }
 
     @Test
     void readTypeDefinitions() {
+        var source = new WinmdMetadataTables(reader.rawTables());
         int count = 0;
-        for (var ignored : metadataFile.getTypeDefs()) {
+        for (var ignored : source.getTypeDefs()) {
             count += 1;
         }
         assertThat(count).isGreaterThan(10000);

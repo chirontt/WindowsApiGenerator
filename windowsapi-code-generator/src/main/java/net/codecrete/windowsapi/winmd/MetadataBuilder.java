@@ -60,7 +60,7 @@ import static net.codecrete.windowsapi.winmd.tables.TypeDef.VISIBILITY_PUBLIC;
 public class MetadataBuilder implements TypeLookup {
     private static final String APIS = "Apis";
 
-    private final MetadataFile metadataFile;
+    private final MetadataSource metadataSource;
     private final Metadata metadata;
     private final VariantTransformation variantTransformation;
     private final Primitive[] primitiveTypes = new Primitive[15];
@@ -79,15 +79,15 @@ public class MetadataBuilder implements TypeLookup {
      */
     public static Metadata load() {
         try (var stream = MetadataBuilder.class.getClassLoader().getResourceAsStream("Windows.Win32.winmd")) {
-            var builder = new MetadataBuilder(new MetadataFile(stream));
+            var builder = new MetadataBuilder(new WinmdMetadataTables(new WinmdReader(stream).rawTables()));
             return builder.build();
         } catch (IOException e) {
             throw new WinmdException("Cannot open resource 'Windows.Win32.winmd'", e);
         }
     }
 
-    private MetadataBuilder(MetadataFile metadataFile) {
-        this.metadataFile = metadataFile;
+    private MetadataBuilder(MetadataSource metadataSource) {
+        this.metadataSource = metadataSource;
         metadata = new Metadata();
         variantTransformation = new VariantTransformation(metadata);
 
@@ -110,7 +110,7 @@ public class MetadataBuilder implements TypeLookup {
         voidPointerType = metadata.makePointerFor(primitiveTypes[ElementTypes.VOID]);
 
         signatureDecoder = new SignatureDecoder(this);
-        customAttributeDecoder = new CustomAttributeDecoder(this, metadataFile);
+        customAttributeDecoder = new CustomAttributeDecoder(this, metadataSource);
         systemGuidType = ((Struct) metadata.getType("System", "Guid"));
     }
 
@@ -131,7 +131,7 @@ public class MetadataBuilder implements TypeLookup {
      */
     private void buildTypes() {
         // create types without fields and functions without parameters
-        for (int typeDefIndex = 2; typeDefIndex <= metadataFile.getTypeDefinitionCount(); typeDefIndex += 1) {
+        for (int typeDefIndex = 2; typeDefIndex <= metadataSource.getTypeDefinitionCount(); typeDefIndex += 1) {
             buildType(typeDefIndex);
         }
     }
@@ -140,9 +140,9 @@ public class MetadataBuilder implements TypeLookup {
     private void buildType(int typeDefIndex) {
         assert metadata.getTypeByTypeDefIndex(typeDefIndex) == null;
 
-        var typeDef = metadataFile.getTypeDef(typeDefIndex);
-        var typeName = metadataFile.getString(typeDef.typeName());
-        var namespaceName = metadataFile.getString(typeDef.typeNamespace());
+        var typeDef = metadataSource.getTypeDef(typeDefIndex);
+        var typeName = metadataSource.getString(typeDef.typeName());
+        var namespaceName = metadataSource.getString(typeDef.typeNamespace());
 
         int visibility = typeDef.typeAttributes() & VISIBILITY_MASK;
         assert visibility == VISIBILITY_PUBLIC || visibility == VISIBILITY_NESTED_PUBLIC;
@@ -162,7 +162,7 @@ public class MetadataBuilder implements TypeLookup {
         if (customAttributesData.isTypedef)
             typeKind = TypeKind.ALIAS;
 
-        var classLayout = (typeDef.typeAttributes() & LAYOUT_MASK) != 0 ? metadataFile.getClassLayout(typeDefIndex) :
+        var classLayout = (typeDef.typeAttributes() & LAYOUT_MASK) != 0 ? metadataSource.getClassLayout(typeDefIndex) :
                 null;
         var isUnion = (typeDef.typeAttributes() & LAYOUT_MASK) == LAYOUT_EXPLICIT;
         var packageSize = classLayout != null ? classLayout.packingSize() : 0;
@@ -170,7 +170,7 @@ public class MetadataBuilder implements TypeLookup {
 
         Struct enclosingType = null;
         if (isNested) {
-            var nestedClass = metadataFile.getNestedClass(typeDefIndex);
+            var nestedClass = metadataSource.getNestedClass(typeDefIndex);
             assert nestedClass != null;
             // The spec guarantees that the enclosing type precedes the nested type.
             // So the type must already exist.
@@ -273,15 +273,15 @@ public class MetadataBuilder implements TypeLookup {
      */
     private List<Member> getFields(int typeDefIndex, Struct parentType, String currentNamespace) {
         var fields = new ArrayList<Member>();
-        for (var field : metadataFile.getFields(typeDefIndex)) {
-            var name = metadataFile.getString(field.name());
-            var fieldType = signatureDecoder.decodeFieldSignature(metadataFile.getBlob(field.signature()), parentType, currentNamespace);
+        for (var field : metadataSource.getFields(typeDefIndex)) {
+            var name = metadataSource.getString(field.name());
+            var fieldType = signatureDecoder.decodeFieldSignature(metadataSource.getBlob(field.signature()), parentType, currentNamespace);
             Object value = null;
             if (field.flags() == (Field.PUBLIC | Field.STATIC | Field.LITERAL | Field.HAS_DEFAULT)) {
                 var parentIndex = CodedIndex.encode(FIELD, field.index(), CodedIndexes.HAS_CONSTANT_TABLES);
-                var constant = metadataFile.getConstant(parentIndex);
+                var constant = metadataSource.getConstant(parentIndex);
                 assert constant.type() != ElementTypes.CLASS;
-                var valueBlob = metadataFile.getBlob(constant.value());
+                var valueBlob = metadataSource.getBlob(constant.value());
                 value = Decoder.readConstantVal(valueBlob, constant.type());
                 assert valueBlob.isAtEnd();
             } else if (fieldType instanceof Array array) {
@@ -329,7 +329,7 @@ public class MetadataBuilder implements TypeLookup {
     }
 
     private List<ComInterface> getInterfaces(int typeDefIndex) {
-        return StreamSupport.stream(metadataFile.getInterfaceImpl(typeDefIndex).spliterator(), false)
+        return StreamSupport.stream(metadataSource.getInterfaceImpl(typeDefIndex).spliterator(), false)
                 .map(interfaceImpl -> {
                     var typeDefOrRef = interfaceImpl.interfaceTypeDefOrRef();
                     assert typeDefOrRef.table() == TYPE_REF;
@@ -343,7 +343,7 @@ public class MetadataBuilder implements TypeLookup {
      * Calculates the layouts of all types
      */
     private void calculateTypeLayout() {
-        var calculator = new StructLayouter(metadataFile);
+        var calculator = new StructLayouter(metadataSource);
         metadata.types().forEach(type -> {
             if (type instanceof Struct struct)
                 calculator.layout(struct);
@@ -416,9 +416,9 @@ public class MetadataBuilder implements TypeLookup {
     }
 
     private Stream<Method> createMethods(int typeDefIndex, Namespace parentNamespace) {
-        return StreamSupport.stream(metadataFile.getMethodDefs(typeDefIndex).spliterator(), false)
+        return StreamSupport.stream(metadataSource.getMethodDefs(typeDefIndex).spliterator(), false)
                 .map(methodDef -> {
-                    var methodName = metadataFile.getString(methodDef.name());
+                    var methodName = metadataSource.getString(methodDef.name());
                     return new Method(methodName, parentNamespace, methodDef.index());
                 });
     }
@@ -439,10 +439,10 @@ public class MetadataBuilder implements TypeLookup {
         assert method.methodDefIndex() != 0;
         var memberForwarded = CodedIndex.encode(METHOD_DEF, method.methodDefIndex(),
                 CodedIndexes.MEMBER_FORWARDED_TABLES);
-        var implMap = metadataFile.getImplMap(memberForwarded);
+        var implMap = metadataSource.getImplMap(memberForwarded);
         if (implMap != null) {
-            var nameIndex = metadataFile.getModuleRefName(implMap.importScope());
-            method.setDll(metadataFile.getString(nameIndex));
+            var nameIndex = metadataSource.getModuleRefName(implMap.importScope());
+            method.setDll(metadataSource.getString(nameIndex));
             if (method.dll().equals("FORCEINLINE")) {
                 assert method.constantValue() != null;
                 method.setDll(null);
@@ -450,17 +450,17 @@ public class MetadataBuilder implements TypeLookup {
             method.setSupportsLastError((implMap.flags() & SUPPORTS_LAST_ERROR) != 0);
         }
 
-        var methodDef = metadataFile.getMethodDef(method.methodDefIndex());
+        var methodDef = metadataSource.getMethodDef(method.methodDefIndex());
         var methodSignature =
-                signatureDecoder.decodeMethodDefSignature(metadataFile.getBlob(methodDef.signature()));
+                signatureDecoder.decodeMethodDefSignature(metadataSource.getBlob(methodDef.signature()));
         var returnType = methodSignature.returnType();
         method.setReturnType(returnType);
         method.setSupportsAllocator(returnType instanceof Struct);
 
         var parameters = new Parameter[methodSignature.paramTypes().length];
         int index = 0;
-        for (var param : metadataFile.getParameters(method.methodDefIndex())) {
-            String paramName = metadataFile.getString(param.name());
+        for (var param : metadataSource.getParameters(method.methodDefIndex())) {
+            String paramName = metadataSource.getString(param.name());
             if (param.sequence() < 1) {
                 // return type
                 assert paramName == null;
@@ -536,11 +536,11 @@ public class MetadataBuilder implements TypeLookup {
         String namespace = "";
         String name = "";
         if (typeDefOrRefIndex.table() == TYPE_REF) {
-            var typeRef = metadataFile.getTypeRef(typeDefOrRefIndex.index());
+            var typeRef = metadataSource.getTypeRef(typeDefOrRefIndex.index());
             var resolutionScopeIndex = typeRef.resolutionScopeIndex();
             if (resolutionScopeIndex.table() == ASSEMBLY_REF && resolutionScopeIndex.index() == 1) {
-                namespace = metadataFile.getString(typeRef.typeNamespace());
-                name = metadataFile.getString(typeRef.typeName());
+                namespace = metadataSource.getString(typeRef.typeNamespace());
+                name = metadataSource.getString(typeRef.typeName());
             } else {
                 assert false : "Unexpected resolution scope for base type reference";
             }
@@ -569,9 +569,9 @@ public class MetadataBuilder implements TypeLookup {
 
     @Override
     public Type getTypeByTypeRef(int typeRefIndex, Struct parentType, String currentNamespace, boolean externalTypeAllowed) {
-        var typeRef = metadataFile.getTypeRef(typeRefIndex);
-        var namespace = metadataFile.getString(typeRef.typeNamespace());
-        var name = metadataFile.getString(typeRef.typeName());
+        var typeRef = metadataSource.getTypeRef(typeRefIndex);
+        var namespace = metadataSource.getString(typeRef.typeNamespace());
+        var name = metadataSource.getString(typeRef.typeName());
         var resolutionScopeIndex = typeRef.resolutionScopeIndex();
         return switch (resolutionScopeIndex.table()) {
             case TYPE_REF -> {

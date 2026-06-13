@@ -176,18 +176,18 @@ class CustomAttributeDecoder extends Decoder {
             new QualifiedName(METADATA, "RetValAttribute")
     );
 
-    private final MetadataFile metadataFile;
+    private final MetadataSource metadataSource;
     private final Primitive stringType;
 
     /**
      * Creates a new custom attribute decoder.
      *
      * @param typeLookup   an instance for providing type information
-     * @param metadataFile the metadata file to retrieve additional information
+     * @param metadataSource the metadata source to retrieve additional information
      */
-    CustomAttributeDecoder(TypeLookup typeLookup, MetadataFile metadataFile) {
+    CustomAttributeDecoder(TypeLookup typeLookup, MetadataSource metadataSource) {
         super(typeLookup);
-        this.metadataFile = metadataFile;
+        this.metadataSource = metadataSource;
         this.stringType = typeLookup.getPrimitiveType(ElementTypes.STRING);
     }
 
@@ -245,18 +245,18 @@ class CustomAttributeDecoder extends Decoder {
 
     private <T> void extractAttributes(int hasCustomAttributeIndex, Map<QualifiedName, Extractor<T>> extractors,
                                        Set<QualifiedName> ignoredAttributes, T data) {
-        for (var customAttribute : metadataFile.getCustomAttributes(hasCustomAttributeIndex)) {
+        for (var customAttribute : metadataSource.getCustomAttributes(hasCustomAttributeIndex)) {
             var constructor = customAttribute.constructorIndex();
             assert constructor.table() == MEMBER_REF;
             assert constructor.index() != 0;
-            var memberRef = metadataFile.getMemberRef(constructor.index());
+            var memberRef = metadataSource.getMemberRef(constructor.index());
             var parent = memberRef.parentIndex();
             assert parent.table() == TYPE_REF;
             assert parent.index() != 0;
-            var typeRef = metadataFile.getTypeRef(parent.index());
+            var typeRef = metadataSource.getTypeRef(parent.index());
             var qualifiedName = new QualifiedName(
-                    metadataFile.getString(typeRef.typeNamespace()),
-                    metadataFile.getString(typeRef.typeName())
+                    metadataSource.getString(typeRef.typeNamespace()),
+                    metadataSource.getString(typeRef.typeName())
             );
 
             if (ignoredAttributes.contains(qualifiedName))
@@ -270,8 +270,8 @@ class CustomAttributeDecoder extends Decoder {
     }
 
     private CustomAttributeValue getValue(CustomAttribute customAttribute, MemberRef memberRef) {
-        var methodSignature = decodeMethodRefSignature(metadataFile.getBlob(memberRef.signature()));
-        var valueBlob = metadataFile.getBlob(customAttribute.value());
+        var methodSignature = decodeMethodRefSignature(metadataSource.getBlob(memberRef.signature()));
+        var valueBlob = metadataSource.getBlob(customAttribute.value());
         return decodeCustomAttributeValue(methodSignature, valueBlob);
     }
 
@@ -307,10 +307,10 @@ class CustomAttributeDecoder extends Decoder {
      * @return lazily decoded string
      */
     private LazyString getLazyString(CustomAttribute customAttribute, MemberRef memberRef) {
-        var methodSignature = decodeMethodRefSignature(metadataFile.getBlob(memberRef.signature()));
+        var methodSignature = decodeMethodRefSignature(metadataSource.getBlob(memberRef.signature()));
         assert methodSignature.paramTypes().length == 1;
         assert methodSignature.paramTypes()[0] == stringType;
-        var valueBlob = metadataFile.getBlob(customAttribute.value());
+        var valueBlob = metadataSource.getBlob(customAttribute.value());
         var value = decodeSingleStringValue(valueBlob);
         int numNamedArgs = valueBlob.readUInt16();
         assert numNamedArgs == 0;

@@ -6,22 +6,7 @@
 //
 package net.codecrete.windowsapi.winmd;
 
-import net.codecrete.windowsapi.winmd.tables.ClassLayout;
-import net.codecrete.windowsapi.winmd.tables.Constant;
-import net.codecrete.windowsapi.winmd.tables.CustomAttribute;
-import net.codecrete.windowsapi.winmd.tables.Field;
-import net.codecrete.windowsapi.winmd.tables.FieldLayout;
-import net.codecrete.windowsapi.winmd.tables.ImplMap;
-import net.codecrete.windowsapi.winmd.tables.InterfaceImpl;
-import net.codecrete.windowsapi.winmd.tables.MemberRef;
-import net.codecrete.windowsapi.winmd.tables.MethodDef;
-import net.codecrete.windowsapi.winmd.tables.NestedClass;
-import net.codecrete.windowsapi.winmd.tables.Param;
-import net.codecrete.windowsapi.winmd.tables.RowKeyTableIterable;
 import net.codecrete.windowsapi.winmd.tables.Table;
-import net.codecrete.windowsapi.winmd.tables.TableRangeIterable;
-import net.codecrete.windowsapi.winmd.tables.TypeDef;
-import net.codecrete.windowsapi.winmd.tables.TypeRef;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -84,40 +69,24 @@ import static net.codecrete.windowsapi.winmd.tables.MetadataTables.TYPE_REF;
 import static net.codecrete.windowsapi.winmd.tables.MetadataTables.TYPE_SPEC;
 
 /**
- * Metadata file.
+ * Reads a .winmd file.
  * <p>
  * Metadata files are .winmd files in the Portable Executable (PE) format
  * containing metadata in one of the sections.
  * </p>
  * <p>
- * This class reads .winmd files and provides access to the different components
- * such as tables, blob and strings.
+ * This class parses the binary format (PE headers, metadata streams, heaps) and
+ * exposes the result as {@link RawTables}. Typed access to the tables is provided
+ * by {@link WinmdMetadataTables}, which adapts the raw tables to {@link MetadataSource}.
  * </p>
  */
-public class MetadataFile {
+class WinmdReader {
     private final LittleEndianDataInputStream inputStream;
     private String version;
     private MetadataStream[] streams;
     private byte[] blobHeap;
     private byte[] stringHeap;
     private final Table[] tables = new Table[64];
-    private Table classLayouts;
-    private Table constants;
-    private Table customAttributes;
-    private Table fields;
-    private Table fieldLayouts;
-    private Table implMaps;
-    private Table interfaceImpls;
-    private Table memberRefs;
-    private Table methodDefs;
-    private Table moduleRefs;
-    private Table nestedClasses;
-    private Table params;
-    private Table typeDefs;
-    private Table typeRefs;
-    private int hasCustomAttributeIndexWidth;
-    private int hasConstantIndexWidth;
-    private int memberForwardedIndexWidth;
 
     private static final Set<Integer> USED_TABLES = Set.of(
             CLASS_LAYOUT,
@@ -141,7 +110,7 @@ public class MetadataFile {
      *
      * @param inputStream input stream providing the .winmd contents
      */
-    public MetadataFile(InputStream inputStream) {
+    WinmdReader(InputStream inputStream) {
         this.inputStream = new LittleEndianDataInputStream(inputStream);
         try {
             read();
@@ -169,320 +138,12 @@ public class MetadataFile {
     }
 
     /**
-     * Gets the "ClassLayout" row for the specified parent.
+     * Returns the raw tables and heaps parsed from the .winmd file.
      *
-     * @param parent parent (TypeDef index)
-     * @return class layout
+     * @return the raw tables
      */
-    public ClassLayout getClassLayout(int parent) {
-        var index = classLayouts.indexByPrimaryKey(parent, simpleIndexWidth(TYPE_DEF), 6);
-        if (index == 0)
-            return null;
-
-        int[] values = new int[3];
-        classLayouts.getRow(index, values);
-        return new ClassLayout(values[0], values[1], values[2]);
-    }
-
-    /**
-     * Gets the "Constant" row for the specified parent.
-     *
-     * @param parent parent (HasConstant coded index)
-     * @return constant
-     */
-    public Constant getConstant(int parent) {
-        var index = constants.indexByPrimaryKey(parent, hasConstantIndexWidth, 2);
-        assert index != 0;
-
-        int[] values = new int[3];
-        constants.getRow(index, values);
-        return new Constant(values[0], values[1], values[2]);
-    }
-
-    /**
-     * Gets the "CustomAttribute" rows for the specified parent
-     *
-     * @param parent (HasCustomAttribute coded index)
-     * @return iterable for iterating the "CustomAttribute" rows
-     */
-    public Iterable<CustomAttribute> getCustomAttributes(int parent) {
-        return new RowKeyTableIterable<>(customAttributes, parent, hasCustomAttributeIndexWidth, index -> {
-            int[] values = new int[3];
-            customAttributes.getRow(index, values);
-            return new CustomAttribute(values[0], values[1], values[2]);
-        });
-    }
-
-    /**
-     * Gets the "Field" rows for the specified type definition.
-     *
-     * @param typeDefIndex typeDef (index into TypeDef table)
-     * @return iterable for iterating the "Field" rows
-     */
-    public Iterable<Field> getFields(int typeDefIndex) {
-        int firstField = typeDefs.getValue(typeDefIndex, 4);
-        int lastField;
-        if (typeDefIndex + 1 <= typeDefs.numRows())
-            lastField = typeDefs.getValue(typeDefIndex + 1, 4) - 1;
-        else
-            lastField = fields.numRows();
-        assert firstField <= lastField + 1;
-
-        return new TableRangeIterable<>(firstField, lastField, index -> {
-            int[] values = new int[3];
-            fields.getRow(index, values);
-            return new Field(
-                    index,
-                    values[0],
-                    values[1],
-                    values[2]
-            );
-        });
-    }
-
-    /**
-     * Gets the "FieldLayout" row for the specified field.
-     *
-     * @param field field (Field index)
-     * @return field layout
-     */
-    public FieldLayout getFieldLayout(int field) {
-        var index = fieldLayouts.indexByPrimaryKey(field, simpleIndexWidth(FIELD), 4);
-        if (index == 0)
-            return null;
-
-        int[] values = new int[2];
-        fieldLayouts.getRow(index, values);
-        return new FieldLayout(values[0], values[1]);
-    }
-
-    /**
-     * Gets the "ImplMap" row for the specified member.
-     *
-     * @param memberForwarded field or method definition (MemberForwarded coded index)
-     * @return implementation map, or {@code null} if none is found
-     */
-    public ImplMap getImplMap(int memberForwarded) {
-        var index = implMaps.indexByPrimaryKey(memberForwarded, memberForwardedIndexWidth, 2);
-        if (index == 0)
-            return null;
-
-        int[] values = new int[4];
-        implMaps.getRow(index, values);
-        return new ImplMap(values[0], values[1], values[2], values[3]);
-    }
-
-    /**
-     * Gets the "InterfaceImpl" rows for the specified class.
-     *
-     * @param classIndex type definition (index into TypeDef table)
-     * @return iterable for iterating the "InterfaceImpl" rows
-     */
-    public Iterable<InterfaceImpl> getInterfaceImpl(int classIndex) {
-        return new RowKeyTableIterable<>(interfaceImpls, classIndex, simpleIndexWidth(TYPE_DEF), index -> {
-            int[] values = new int[2];
-            interfaceImpls.getRow(index, values);
-            return new InterfaceImpl(values[0], values[1]);
-        });
-    }
-
-    /**
-     * Gets the "MemberRef" row for the specified index.
-     *
-     * @param index row index
-     * @return member reference
-     */
-    public MemberRef getMemberRef(int index) {
-        int[] values = new int[3];
-        memberRefs.getRow(index, values);
-        return new MemberRef(
-                values[0],
-                values[1],
-                values[2]
-        );
-    }
-
-    /**
-     * Gets the "MethodDef" row with the specified index.
-     *
-     * @param index (MethodDef index)
-     * @return method definition entry
-     */
-    public MethodDef getMethodDef(int index) {
-        int[] values = new int[6];
-        methodDefs.getRow(index, values);
-        return new MethodDef(
-                index,
-                values[0],
-                values[1],
-                values[2],
-                values[3],
-                values[4],
-                values[5]
-        );
-    }
-
-    /**
-     * Gets the "MethodDef" rows for the specified type definition.
-     *
-     * @param typeDefIndex typeDef (index into TypeDef table)
-     * @return iterable for iterating the "MethodDef" rows
-     */
-    public Iterable<MethodDef> getMethodDefs(int typeDefIndex) {
-        int firstMethod = typeDefs.getValue(typeDefIndex, 5);
-        int lastMethod;
-        if (typeDefIndex + 1 <= typeDefs.numRows())
-            lastMethod = typeDefs.getValue(typeDefIndex + 1, 5) - 1;
-        else
-            lastMethod = methodDefs.numRows();
-        assert firstMethod <= lastMethod + 1;
-
-        return new TableRangeIterable<>(firstMethod, lastMethod, this::getMethodDef);
-    }
-
-    /**
-     * Gets the ModuleRef name for the specified index.
-     *
-     * @param moduleRef (ModuleRef index)
-     * @return string index
-     */
-    public int getModuleRefName(int moduleRef) {
-        int[] values = new int[1];
-        moduleRefs.getRow(moduleRef, values);
-        return values[0];
-    }
-
-    /**
-     * Gets the "NestedClass" row for the specified class.
-     *
-     * @param nestedClass nested class (TypeAlias index)
-     * @return nested class entry (consisting of nested and enclosing class), or {@code null} if none is found
-     */
-    public NestedClass getNestedClass(int nestedClass) {
-        var index = nestedClasses.indexByPrimaryKey(nestedClass, simpleIndexWidth(TYPE_DEF), 0);
-        if (index == 0)
-            return null;
-
-        int[] values = new int[2];
-        nestedClasses.getRow(index, values);
-        return new NestedClass(values[0], values[1]);
-    }
-
-    /**
-     * Gets the "Param" rows for the specified method definition.
-     *
-     * @param methodDefIndex methodDef (index into MethodDef table)
-     * @return iterable for iterating the "Param" rows
-     */
-    public Iterable<Param> getParameters(int methodDefIndex) {
-        int firstParam = methodDefs.getValue(methodDefIndex, 5);
-        int lastParam;
-        if (methodDefIndex + 1 <= methodDefs.numRows())
-            lastParam = methodDefs.getValue(methodDefIndex + 1, 5) - 1;
-        else
-            lastParam = params.numRows();
-        assert firstParam <= lastParam + 1;
-
-        return new TableRangeIterable<>(firstParam, lastParam, index -> {
-            int[] values = new int[3];
-            params.getRow(index, values);
-            return new Param(
-                    index,
-                    values[0],
-                    values[1],
-                    values[2]
-            );
-        });
-    }
-
-    /**
-     * Gets the "TypeDef" row for the specified index.
-     *
-     * @param typeDefIndex typeDef (index into TypeDef table)
-     * @return the type definition
-     */
-    public TypeDef getTypeDef(int typeDefIndex) {
-        int[] values = new int[6];
-        typeDefs.getRow(typeDefIndex, values);
-        return new TypeDef(
-                values[0],
-                values[1],
-                values[2],
-                values[3],
-                values[4],
-                values[5]
-        );
-    }
-
-    /**
-     * Gets an iterator over the TypeDef table.
-     *
-     * @return the iterator
-     */
-    public Iterable<TypeDef> getTypeDefs() {
-        return new TableRangeIterable<>(1, typeDefs.numRows(), this::getTypeDef);
-    }
-
-    /**
-     * Gets the number of rows in the TypeDef table.
-     *
-     * @return the number of rows
-     */
-    public int getTypeDefinitionCount() {
-        return typeDefs.numRows();
-    }
-
-    /**
-     * Gets the "TypeRef" row for the specified index.
-     *
-     * @param index row index
-     * @return type reference
-     */
-    public TypeRef getTypeRef(int index) {
-        int[] values = new int[3];
-        typeRefs.getRow(index, values);
-        return new TypeRef(values[0], values[1], values[2]);
-    }
-
-    /**
-     * Gets the string with the specified index from the 'string' heap.
-     *
-     * @param index string index
-     * @return string
-     */
-    public String getString(int index) {
-        if (index == 0)
-            return null;
-        int end = index;
-        while (stringHeap[end] != 0)
-            end += 1;
-        return new String(stringHeap, index, end - index, StandardCharsets.UTF_8);
-    }
-
-    /**
-     * Gets the Blob with the specified index from the 'blob' heap.
-     *
-     * @param index blob index
-     * @return blob handle
-     */
-    public Blob getBlob(int index) {
-        int b1 = blobHeap[index] & 0xff;
-        int length;
-        if ((b1 & 0x80) == 0x00) {
-            length = b1;
-            index += 1;
-        } else if ((b1 & 0xc0) == 0x80) {
-            length = ((b1 & 0x3f) << 8) + (blobHeap[index + 1] & 0xff);
-            index += 2;
-        } else if ((b1 & 0xe0) == 0xc0) {
-            length = ((b1 & 0x1f) << 24) + ((blobHeap[index + 1] & 0xff) << 16)
-                    + ((blobHeap[index + 2] & 0xff) << 8) + (blobHeap[index + 3] & 0xff);
-            index += 4;
-        } else {
-            throw new WinmdException("Invalid data in blob");
-        }
-
-        return new Blob(blobHeap, index, length);
+    RawTables rawTables() {
+        return new RawTables(tables, stringHeap, blobHeap);
     }
 
     /**
@@ -648,14 +309,14 @@ public class MetadataFile {
         // compute the length of coded indexes
         // (see ECMA-335, II.24.2.6 #~ stream)
         var typeDefOrRefIndexWidth = codedIndexWidth(TYPE_DEF_OR_REF_TABLES);
-        hasConstantIndexWidth = codedIndexWidth(HAS_CONSTANT_TABLES);
-        hasCustomAttributeIndexWidth = codedIndexWidth(HAS_CUSTOM_ATTRIBUTE_TABLES);
+        var hasConstantIndexWidth = codedIndexWidth(HAS_CONSTANT_TABLES);
+        var hasCustomAttributeIndexWidth = codedIndexWidth(HAS_CUSTOM_ATTRIBUTE_TABLES);
         var hasFieldMarshalIndexWidth = codedIndexWidth(HAS_FIELD_MARSHAL_TABLES);
         var hasDeclSecurityIndexWidth = codedIndexWidth(HAS_DECL_SECURITY_TABLES);
         var memberRefParentIndexWidth = codedIndexWidth(MEMBER_REF_PARENT_TABLES);
         var hasSemanticsIndexWidth = codedIndexWidth(HAS_SEMANTICS_TABLES);
         var methodDefOrRefIndexWidth = codedIndexWidth(METHOD_DEF_OR_REF_TABLES);
-        memberForwardedIndexWidth = codedIndexWidth(MEMBER_FORWARDED_TABLES);
+        var memberForwardedIndexWidth = codedIndexWidth(MEMBER_FORWARDED_TABLES);
         var implementationIndexWidth = codedIndexWidth(IMPLEMENTATION_TABLES);
         var customAttributeTypeIndexWidth = codedIndexWidth(CUSTOM_ATTRIBUTE_TYPE_TABLES);
         var resolutionScopeIndexWidth = codedIndexWidth(RESOLUTION_SCOPE_TABLES);
@@ -730,21 +391,6 @@ public class MetadataFile {
                 inputStream.skipNBytes(tableLength);
             }
         }
-
-        classLayouts = tables[CLASS_LAYOUT];
-        constants = tables[CONSTANT];
-        customAttributes = tables[CUSTOM_ATTRIBUTE];
-        fields = tables[FIELD];
-        fieldLayouts = tables[FIELD_LAYOUT];
-        implMaps = tables[IMPL_MAP];
-        interfaceImpls = tables[INTERFACE_IMPL];
-        memberRefs = tables[MEMBER_REF];
-        methodDefs = tables[METHOD_DEF];
-        moduleRefs = tables[MODULE_REF];
-        nestedClasses = tables[NESTED_CLASS];
-        params = tables[PARAM];
-        typeDefs = tables[TYPE_DEF];
-        typeRefs = tables[TYPE_REF];
     }
 
     private int simpleIndexWidth(int table) {

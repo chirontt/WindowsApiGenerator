@@ -36,15 +36,15 @@ class StructLayouter {
             "KSSTREAMALLOCATOR_STATUS_EX"
     );
 
-    private final MetadataFile metadataFile;
+    private final MetadataSource metadataSource;
 
     /**
      * Creates a new instance.
      *
-     * @param metadataFile the metadata file to get additional information from
+     * @param metadataSource the metadata source to get additional information from
      */
-    StructLayouter(MetadataFile metadataFile) {
-        this.metadataFile = metadataFile;
+    StructLayouter(MetadataSource metadataSource) {
+        this.metadataSource = metadataSource;
     }
 
     /**
@@ -94,7 +94,7 @@ class StructLayouter {
         Member previousMember = null;
 
         for (var member : struct.members()) {
-            var fieldLayout = metadataFile.getFieldLayout(member.fieldIndex());
+            var fieldLayout = metadataSource.getFieldLayout(member.fieldIndex());
             assert fieldLayout.offset() == 0;
             ensureLayoutDone(member.type());
             state.overlay(member.type());
