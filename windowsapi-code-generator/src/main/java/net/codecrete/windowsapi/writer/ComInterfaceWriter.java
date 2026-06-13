@@ -17,6 +17,7 @@ import net.codecrete.windowsapi.metadata.TypeAlias;
 /**
  * Creates the Java code for COM interfaces.
  */
+@SuppressWarnings("resource")
 class ComInterfaceWriter extends FunctionCodeWriterBase<ComInterface> {
 
     private final CommentWriter commentWriter = new CommentWriter();
@@ -36,21 +37,24 @@ class ComInterfaceWriter extends FunctionCodeWriterBase<ComInterface> {
      * @param comInterface the COM interface
      */
     void writeComInterface(ComInterface comInterface) {
-        var className = toJavaClassName(comInterface.name());
-        withFile(comInterface.namespace(), comInterface, className, this::writeComInterfaceContent);
+        var name = toJavaClassName(comInterface.name());
+        withFile(comInterface.namespace(), comInterface, name, this::writeComInterfaceContent);
     }
 
-    private void writeComInterfaceContent() {
+    private void writeComInterfaceContent(JavaSourceFile<ComInterface> file) {
+        var writer = file.writer();
+        var type = file.type();
+
         writer.printf("""
                 package %s;
-                
+
                 import java.lang.foreign.*;
                 import java.lang.invoke.*;
                 import static java.lang.foreign.ValueLayout.*;
-                
-                """, packageName);
 
-        writeComInterfaceComment();
+                """, file.packageName());
+
+        writeComInterfaceComment(file);
 
         var extendsInterface = "";
         var implementedInterface = type.implementedInterface();
@@ -63,34 +67,36 @@ class ComInterfaceWriter extends FunctionCodeWriterBase<ComInterface> {
         }
         writer.printf("""
                 public interface %s%s {
-                """, className, extendsInterface);
+                """, file.className(), extendsInterface);
 
         var methodNames = getAllMethodNames(type);
-        writeComInterfaceMethods(methodNames);
+        writeComInterfaceMethods(file, methodNames);
 
-        writeCommonMethods(methodNames);
+        writeCommonMethods(file, methodNames);
 
-        writeAddressLayouts();
+        writeAddressLayouts(file);
 
-        writeIidInnerClass();
+        writeIidInnerClass(file);
 
-        writeDowncallWrapper(methodNames, extendsInterface);
+        writeDowncallWrapper(file, methodNames, extendsInterface);
 
         final var methodOffset = getNumSuperMethods(type);
         for (int i = 0; i < type.methods().size(); i++) {
             var method = type.methods().get(i);
             var methodIndex = methodOffset + i;
             var innerClassName = "VFUNC" + methodIndex;
-            writeFunctionInnerClass(method, innerClassName);
+            writeFunctionInnerClass(file, method, innerClassName);
         }
 
-        writeUpcallWrapper(methodNames);
-        writeUpcallImplementation(methodNames);
+        writeUpcallWrapper(file, methodNames);
+        writeUpcallImplementation(file, methodNames);
 
         writer.println("}");
     }
 
-    private void writeComInterfaceMethods(String[] methodNames) {
+    private void writeComInterfaceMethods(JavaSourceFile<ComInterface> file, String[] methodNames) {
+        var writer = file.writer();
+        var type = file.type();
         final var methodOffset = getNumSuperMethods(type);
         for (int i = 0; i < type.methods().size(); i++) {
             var method = type.methods().get(i);
@@ -99,81 +105,89 @@ class ComInterfaceWriter extends FunctionCodeWriterBase<ComInterface> {
             commentWriter.writeFunctionComment(writer, method, "COM interface method");
 
             writer.print("    ");
-            writeFunctionSignatureIntro(method, methodName);
-            writeFunctionSignatureParameters(method);
+            writeFunctionSignatureIntro(writer, method, methodName);
+            writeFunctionSignatureParameters(writer, method);
             writer.println(";");
             writer.println();
         }
     }
 
-    private void writeAddressLayouts() {
+    private void writeAddressLayouts(JavaSourceFile<ComInterface> file) {
+        var writer = file.writer();
+        var type = file.type();
         final var methodOffset = getNumSuperMethods(type);
 
         writer.printf("""
                     StructLayout %1$s$COM_OBJECT_LAYOUT = MemoryLayout.structLayout(
                         ADDRESS.withTargetLayout(MemoryLayout.sequenceLayout(%2$d, ADDRESS)).withName("vtable")
                     );
-                
+
                     AddressLayout %1$s$ADDRESS_LAYOUT = ADDRESS.withTargetLayout(%1$s$COM_OBJECT_LAYOUT);
-                
-                """, className, methodOffset + type.methods().size());
+
+                """, file.className(), methodOffset + type.methods().size());
 
         AddressLayout.requiredLayouts(type).forEach(layoutType ->
-                writeAddressLayoutInitialization(layoutType, ""));
+                writeAddressLayoutInitialization(writer, layoutType, ""));
         writer.println();
 
     }
 
-    private void writeIidInnerClass() {
+    private void writeIidInnerClass(JavaSourceFile<ComInterface> file) {
+        var writer = file.writer();
+        var type = file.type();
         if (type.getIid() == null)
             return;
 
         writer.printf("""
                     class $IID$%1$s {
-                """, className);
+                """, file.className());
 
         writer.print("""
                         private static final Arena ARENA = Arena.ofAuto();
-                
+
                 """);
 
-        writeCreateGuidMethod(8);
-        writeGuidConstantMemorySegment("IID", type.getIid(), 8);
+        writeCreateGuidMethod(writer, 8);
+        writeGuidConstantMemorySegment(writer, "IID", type.getIid(), 8);
 
         writer.print("""
                     }
-                
+
                 """);
     }
 
-    private void writeCommonMethods(String[] methodNames) {
-        writeComment("Wraps the given COM object in a Java object with methods to call the COM interface functions.");
+    private void writeCommonMethods(JavaSourceFile<ComInterface> file, String[] methodNames) {
+        var writer = file.writer();
+        var type = file.type();
+        var className = file.className();
+
+        writeComment(writer, "Wraps the given COM object in a Java object with methods to call the COM interface functions.");
         writer.printf("""
                     static %s wrap(MemorySegment comObject) {
                         return new $DOWNCALL(comObject.reinterpret(8L));
                     }
-                
+
                 """, className);
 
-        writeComment("Gets the address layout for pointers to {@code %s} COM interfaces.", type.name());
+        writeComment(writer, "Gets the address layout for pointers to {@code %s} COM interfaces.", type.name());
         writer.printf("""
                     static AddressLayout addressLayout() {
                         return %1$s$ADDRESS_LAYOUT;
                     }
-                
+
                 """, className);
 
         if (type.getIid() != null) {
-            writeComment("Interface identifier (IID) for {@code %s} ({@code {%s}}).", type.name(), type.getIid());
+            writeComment(writer, "Interface identifier (IID) for {@code %s} ({@code {%s}}).", type.name(), type.getIid());
             writer.printf("""
                         static MemorySegment iid() {
                             return $IID$%1$s.IID$SEG;
                         }
-                    
+
                     """, className);
         }
 
-        writeComment("Creates a COM object instance for the given Java object implementing {@code %s}.",
+        writeComment(writer, "Creates a COM object instance for the given Java object implementing {@code %s}.",
                 toJavaClassName(type.name()));
         writer.printf("""
                     static MemorySegment create(%1$s obj, Arena arena) {
@@ -186,11 +200,14 @@ class ComInterfaceWriter extends FunctionCodeWriterBase<ComInterface> {
                         objSegment.set(ADDRESS, 0, vtable);
                         return objSegment;
                     }
-                
+
                 """, toJavaClassName(type.name()), methodNames.length);
     }
 
-    private void writeDowncallWrapper(String[] methodNames, String extendsInterface) {
+    private void writeDowncallWrapper(JavaSourceFile<ComInterface> file, String[] methodNames, String extendsInterface) {
+        var writer = file.writer();
+        var type = file.type();
+        var className = file.className();
         final var methodOffset = getNumSuperMethods(type);
         var implementedInterface = type.implementedInterface();
 
@@ -205,30 +222,30 @@ class ComInterfaceWriter extends FunctionCodeWriterBase<ComInterface> {
                                 MemoryLayout.PathElement.dereferenceElement(),
                                 MemoryLayout.PathElement.sequenceElement()
                         );
-                
+
                         private static MemorySegment vtableFunc(MemorySegment comObject, long index) {
                             return (MemorySegment) VTABLE_FUNC_VARHANDLE.get(comObject, 0L, index);
                         }
-                
+
                 """, className, extendsSuperClass);
 
-        writeTraceDowncallHeader("        ");
+        writeTraceDowncallHeader(writer, "        ");
 
         if (implementedInterface != null) {
             writer.printf("""
                             protected $DOWNCALL(MemorySegment comObject) {
                                 super(comObject);
                             }
-                    
+
                     """);
         } else {
             writer.printf("""
                             protected final MemorySegment comObject;
-                    
+
                             protected $DOWNCALL(MemorySegment comObject) {
                                 this.comObject = comObject;
                             }
-                    
+
                     """);
         }
 
@@ -239,14 +256,14 @@ class ComInterfaceWriter extends FunctionCodeWriterBase<ComInterface> {
             var innerClassName = "VFUNC" + methodIndex;
 
             writer.print("        public ");
-            writeFunctionSignatureIntro(method, methodName);
-            writeFunctionSignatureParameters(method);
+            writeFunctionSignatureIntro(writer, method, methodName);
+            writeFunctionSignatureParameters(writer, method);
             writer.println(" {");
             var invokeString = innerClassName + "$IMPL.HANDLE.invokeExact(vtableFunc(comObject, " + methodIndex + ")," +
                     " comObject";
             if (hasParameters(method))
                 invokeString += ", ";
-            writeInvoke(method, invokeString, 12);
+            writeInvoke(writer, method, invokeString, 12);
             writer.println("        }");
             writer.println();
         }
@@ -255,7 +272,8 @@ class ComInterfaceWriter extends FunctionCodeWriterBase<ComInterface> {
         writer.println();
     }
 
-    private void writeFunctionInnerClass(Method method, String methodName) {
+    private void writeFunctionInnerClass(JavaSourceFile<ComInterface> file, Method method, String methodName) {
+        var writer = file.writer();
         // start of inner class
         writer.printf("""
                     class %s$IMPL {
@@ -263,30 +281,32 @@ class ComInterfaceWriter extends FunctionCodeWriterBase<ComInterface> {
 
         // function descriptor
         writer.print("        private static final FunctionDescriptor DESC = ");
-        writeFunctionDescriptor(method, className + "$ADDRESS_LAYOUT");
+        writeFunctionDescriptor(writer, method, file.className() + "$ADDRESS_LAYOUT");
         writer.println(";");
 
         // method handle
         writer.print("""
                         private static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(DESC);
                     }
-                
+
                 """);
     }
 
-    private void writeUpcallWrapper(String[] methodNames) {
+    private void writeUpcallWrapper(JavaSourceFile<ComInterface> file, String[] methodNames) {
+        var writer = file.writer();
+        var type = file.type();
         var numMethods = methodNames.length;
         var methods = getAllMethods(type);
 
         writer.printf("""
                     class $UPCALL {
                         private final %1$s javaObject;
-                
+
                         private $UPCALL(%1$s javaObject) {
                             this.javaObject = javaObject;
                         }
-                
-                """, className);
+
+                """, file.className());
 
         // Methods to be used for upcall stubs.
         // Each function calls the matching function of the wrapper Java object.
@@ -295,51 +315,52 @@ class ComInterfaceWriter extends FunctionCodeWriterBase<ComInterface> {
             var method = methods[i];
             var methodName = methodNames[i];
             writer.print("        ");
-            writeFunctionSignatureIntro(method, methodName);
+            writeFunctionSignatureIntro(writer, method, methodName);
             writer.print("MemorySegment thisObject");
             if (hasParameters(method))
                 writer.print(", ");
-            writeFunctionSignatureParameters(method);
+            writeFunctionSignatureParameters(writer, method);
             writer.println(" {");
             writer.print("            ");
             if (method.hasReturnType())
                 writer.print("return ");
             writer.printf("javaObject.%s(", methodNames[i]);
-            writeInvocationArguments(method);
+            writeInvocationArguments(writer, method);
             writer.println(");");
             writer.println("        }");
         }
 
         writer.print("""
                     }
-                
+
                 """);
     }
 
-    private void writeUpcallImplementation(String[] methodNames) {
+    private void writeUpcallImplementation(JavaSourceFile<ComInterface> file, String[] methodNames) {
+        var writer = file.writer();
         var numMethods = methodNames.length;
-        var methods = getAllMethods(type);
+        var methods = getAllMethods(file.type());
 
         // Helper class to create upcall wrappers
         writer.printf("""
                     class $UPCALL_IMPL {
                         private static final FunctionDescriptor[] DESCRIPTORS = createDescriptors();
                         private static final MethodHandle[] HANDLES = createHandles();
-                
+
                         private static FunctionDescriptor[] createDescriptors() {
                             var descriptors = new FunctionDescriptor[%d];
                 """, numMethods);
 
         for (int i = 0; i < numMethods; i++) {
             writer.printf("            descriptors[%d] = ", i);
-            writeFunctionDescriptor(methods[i], "ADDRESS");
+            writeFunctionDescriptor(writer, methods[i], "ADDRESS");
             writer.println(";");
         }
 
         writer.printf("""
                             return descriptors;
                         }
-                
+
                         private static MethodHandle[] createHandles() {
                             try {
                                 var lookup = MethodHandles.lookup();
@@ -489,8 +510,8 @@ class ComInterfaceWriter extends FunctionCodeWriterBase<ComInterface> {
         return index;
     }
 
-    private static long getJavaTypeKey(Type type) {
-        return switch (type) {
+    private static long getJavaTypeKey(Type paramType) {
+        return switch (paramType) {
             case Primitive primitive -> getPrimitiveJavaTypeIndex(primitive);
             case EnumType enumType -> getPrimitiveJavaTypeIndex(enumType.baseType());
             case TypeAlias typeAlias -> getJavaTypeKey(typeAlias.aliasedType());
@@ -498,8 +519,8 @@ class ComInterfaceWriter extends FunctionCodeWriterBase<ComInterface> {
         };
     }
 
-    private static long getPrimitiveJavaTypeIndex(Primitive type) {
-        return switch (type.kind()) {
+    private static long getPrimitiveJavaTypeIndex(Primitive primitive) {
+        return switch (primitive.kind()) {
             case PrimitiveKind.INT64, PrimitiveKind.UINT64, PrimitiveKind.INT_PTR, PrimitiveKind.UINT_PTR -> 1;
             case PrimitiveKind.INT32, PrimitiveKind.UINT32 -> 2;
             case PrimitiveKind.UINT16, PrimitiveKind.INT16, PrimitiveKind.CHAR -> 3;
@@ -507,17 +528,18 @@ class ComInterfaceWriter extends FunctionCodeWriterBase<ComInterface> {
             case PrimitiveKind.SINGLE -> 5;
             case PrimitiveKind.DOUBLE -> 6;
             case PrimitiveKind.BOOL -> 7;
-            default -> throw new AssertionError("Unexpected primitive type: " + type.name());
+            default -> throw new AssertionError("Unexpected primitive type: " + primitive.name());
         };
     }
 
-    private void writeComInterfaceComment() {
+    private void writeComInterfaceComment(JavaSourceFile<ComInterface> file) {
+        var writer = file.writer();
         writer.printf("""
                 /**
                  * {@code %s} COM interface
-                """, type.name());
+                """, file.type().name());
 
-        writeDocumentationUrl(type);
+        writeDocumentationUrl(writer, file.type());
 
         writer.println(" */");
     }

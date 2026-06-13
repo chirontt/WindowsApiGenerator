@@ -9,6 +9,8 @@ package net.codecrete.windowsapi.writer;
 import net.codecrete.windowsapi.metadata.Delegate;
 import net.codecrete.windowsapi.metadata.Method;
 
+import java.io.PrintWriter;
+
 /**
  * Creates the Java code for a callback function.
  */
@@ -31,52 +33,55 @@ class CallbackFunctionCodeWriter extends FunctionCodeWriterBase<Delegate> {
      * @param delegate the callback function
      */
     void writeCallbackFunction(Delegate delegate) {
-        var className = toJavaClassName(delegate.name());
-        withFile(delegate.namespace(), delegate, className, this::writeCallbackFunctionContent);
+        var name = toJavaClassName(delegate.name());
+        withFile(delegate.namespace(), delegate, name, this::writeCallbackFunctionContent);
     }
 
-    private void writeCallbackFunctionContent() {
-        var signature = type.signature();
+    private void writeCallbackFunctionContent(JavaSourceFile<Delegate> file) {
+        var writer = file.writer();
+        var className = file.className();
+        var signature = file.type().signature();
+
         writer.printf("""
                 package %1$s;
-                
+
                 import java.lang.foreign.*;
                 import java.lang.invoke.*;
                 import static java.lang.foreign.ValueLayout.*;
-                
-                """, packageName);
 
-        writeCallbackFunctionComment();
+                """, file.packageName());
+
+        writeCallbackFunctionComment(file);
 
         writer.printf("""
                 public class %1$s {
                 """, className);
 
         // function interface
-        writeComment("Callback function signature as a functional Java interface.");
+        writeComment(writer, "Callback function signature as a functional Java interface.");
         writer.print("""
                     public interface Function {
                 """);
-        writeCallbackFunctionInterfaceInvokeComment(signature);
+        writeCallbackFunctionInterfaceInvokeComment(file, signature);
         writer.print("        ");
-        writeFunctionSignature(signature, "invoke");
+        writeFunctionSignature(writer, signature, "invoke");
         writer.println(";");
         writer.print("""
                     }
-                
+
                 """);
 
         // function descriptor accessor
-        writeComment("Gets the function descriptor of the callback function.");
+        writeComment(writer, "Gets the function descriptor of the callback function.");
         writer.print("""
                     public static FunctionDescriptor descriptor() {
                         return $DESC;
                     }
-                
+
                 """);
 
         // allocate function pointer
-        writeComment("Allocates an upcall stub that will call the given function.");
+        writeComment(writer, "Allocates an upcall stub that will call the given function.");
         writer.printf("""
                     public static MemorySegment allocate(Arena arena, %s.Function function) {
                         return Linker.nativeLinker().upcallStub(UPCALL$MH.bindTo(function), $DESC, arena);
@@ -85,27 +90,27 @@ class CallbackFunctionCodeWriter extends FunctionCodeWriterBase<Delegate> {
         writer.println();
 
         // invoke the function pointer
-        writeTraceDowncallHeader("    ");
-        writeCallbackFunctionInvokeComment(signature);
+        writeTraceDowncallHeader(writer, "    ");
+        writeCallbackFunctionInvokeComment(writer, signature);
         var optionalComma = hasParameters(signature) ? ", " : "";
         writer.print("    public static ");
-        writeFunctionSignatureIntro(signature, "invoke");
+        writeFunctionSignatureIntro(writer, signature, "invoke");
         writer.print("MemorySegment callbackFunction" + optionalComma);
-        writeFunctionSignatureParameters(signature);
+        writeFunctionSignatureParameters(writer, signature);
         writer.println(" {");
-        writeInvoke(signature,
+        writeInvoke(writer, signature,
                 "DOWNCALL$MH.invokeExact(callbackFunction" + optionalComma, 8);
         writer.println("    }");
         writer.println();
 
         // address layouts
         AddressLayout.requiredLayouts(signature).forEach(layoutType ->
-                writeAddressLayoutInitialization(layoutType, "private static final "));
+                writeAddressLayoutInitialization(writer, layoutType, "private static final "));
         writer.println();
 
         // function descriptor
         writer.print("    private static final FunctionDescriptor $DESC = ");
-        writeFunctionDescriptor(signature, null);
+        writeFunctionDescriptor(writer, signature, null);
         writer.println(";");
         writer.println();
 
@@ -118,9 +123,9 @@ class CallbackFunctionCodeWriter extends FunctionCodeWriterBase<Delegate> {
                             throw new RuntimeException(ex);
                         }
                     }
-                
+
                     private static final MethodHandle UPCALL$MH = createUpcallHandle();
-                
+
                 """, className);
 
         // downcall handle
@@ -135,18 +140,20 @@ class CallbackFunctionCodeWriter extends FunctionCodeWriterBase<Delegate> {
                 """, className);
     }
 
-    private void writeCallbackFunctionComment() {
+    private void writeCallbackFunctionComment(JavaSourceFile<Delegate> file) {
+        var writer = file.writer();
         writer.printf("""
                 /**
                  * {@code %1$s} callback function
-                """, type.nativeName());
+                """, file.type().nativeName());
 
-        writeDocumentationUrl(type);
+        writeDocumentationUrl(writer, file.type());
 
         writer.println(" */");
     }
 
-    void writeCallbackFunctionInterfaceInvokeComment(Method method) {
+    void writeCallbackFunctionInterfaceInvokeComment(JavaSourceFile<Delegate> file, Method method) {
+        var writer = file.writer();
         writer.printf("""
                         /**
                          * Invokes the callback function.
@@ -157,7 +164,7 @@ class CallbackFunctionCodeWriter extends FunctionCodeWriterBase<Delegate> {
                          * {@snippet lang=c :
                 """);
 
-        commentWriter.writeFunctionSignatureIntro(writer, method, type.nativeName(), 8);
+        commentWriter.writeFunctionSignatureIntro(writer, method, file.type().nativeName(), 8);
         commentWriter.writeFunctionSignatureParameters(writer, method, 8);
 
         writer.print("""
@@ -168,7 +175,7 @@ class CallbackFunctionCodeWriter extends FunctionCodeWriterBase<Delegate> {
                 """);
     }
 
-    void writeCallbackFunctionInvokeComment(Method method) {
+    void writeCallbackFunctionInvokeComment(PrintWriter writer, Method method) {
         writer.printf("""
                     /**
                      * Invokes the callback function.

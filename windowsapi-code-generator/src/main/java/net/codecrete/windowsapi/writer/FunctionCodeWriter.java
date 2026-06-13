@@ -12,6 +12,7 @@ import net.codecrete.windowsapi.metadata.Pointer;
 import net.codecrete.windowsapi.metadata.Type;
 import net.codecrete.windowsapi.metadata.TypeAlias;
 
+import java.io.PrintWriter;
 import java.util.Collection;
 import java.util.Comparator;
 import java.util.Objects;
@@ -19,6 +20,7 @@ import java.util.Objects;
 /**
  * Creates the Java code for the functions in a given namespace.
  */
+@SuppressWarnings("resource")
 class FunctionCodeWriter extends FunctionCodeWriterBase<Type> {
 
     private static final String CALL_STATE_NOTE_1 = "The additional first parameter takes a segment allocator to " +
@@ -44,24 +46,26 @@ class FunctionCodeWriter extends FunctionCodeWriterBase<Type> {
      */
     void writeFunctions(Namespace namespace, Collection<Method> functions) {
         var sortedFunctions = functions.stream().sorted(Comparator.comparing(Method::name)).toList();
-        withFile(namespace, null, "Apis", () -> writeFunctionsContent(sortedFunctions));
+        withFile(namespace, null, "Apis", file -> writeFunctionsContent(file, sortedFunctions));
     }
 
-    void writeFunctionsContent(Collection<Method> functions) {
+    void writeFunctionsContent(JavaSourceFile<Type> file, Collection<Method> functions) {
+        var writer = file.writer();
+
         writer.printf("""
                 package %s;
-                
+
                 import java.lang.foreign.*;
                 import java.lang.invoke.MethodHandle;
                 import static java.lang.foreign.ValueLayout.*;
-                
-                """, packageName);
 
-        writeApiComment();
+                """, file.packageName());
+
+        writeApiComment(file);
 
         writer.print("""
                 public class Apis {
-                
+
                 """);
 
         writer.print("""
@@ -74,7 +78,7 @@ class FunctionCodeWriter extends FunctionCodeWriterBase<Type> {
                     """, dllName(dll)));
         writer.print("""
                 }
-            
+
             """);
 
         boolean usesLastError = anyFunctionUsesLastError(functions);
@@ -89,14 +93,14 @@ class FunctionCodeWriter extends FunctionCodeWriterBase<Type> {
                     """);
 
         AddressLayout.requiredLayouts(functions).forEach(layoutType ->
-                writeAddressLayoutInitialization(layoutType, "private static final "));
+                writeAddressLayoutInitialization(writer, layoutType, "private static final "));
 
         writer.println();
 
-        writeTraceDowncallHeader("    ");
+        writeTraceDowncallHeader(writer, "    ");
 
         for (var method : functions)
-            writeFunction(method);
+            writeFunction(writer, method);
 
         writer.println("}");
     }
@@ -105,14 +109,14 @@ class FunctionCodeWriter extends FunctionCodeWriterBase<Type> {
         return functions.stream().anyMatch(Method::supportsLastError);
     }
 
-    private void writeFunction(Method method) {
+    private void writeFunction(PrintWriter writer, Method method) {
         var isInlined = method.dll() == null;
 
         if (isInlined) {
             assert method.constantValue() != null;
         } else {
-            writeFunctionInnerClass(method);
-            writeFunctionDescriptorAndHandle(method);
+            writeFunctionInnerClass(writer, method);
+            writeFunctionDescriptorAndHandle(writer, method);
         }
 
         // function
@@ -120,7 +124,7 @@ class FunctionCodeWriter extends FunctionCodeWriterBase<Type> {
 
         var methodName = method.name();
         writer.print("    public static ");
-        writeFunctionSignature(method, methodName);
+        writeFunctionSignature(writer, method, methodName);
         writer.println(" {");
 
         if (isInlined) {
@@ -128,33 +132,33 @@ class FunctionCodeWriter extends FunctionCodeWriterBase<Type> {
             assert method.returnType() instanceof TypeAlias typeAlias && typeAlias.aliasedType() instanceof Pointer;
             writer.printf("        return MemorySegment.ofAddress(%s);", method.constantValue());
         } else {
-            writeInvoke(method, methodName + "$IMPL.HANDLE.invokeExact(", 8);
+            writeInvoke(writer, method, methodName + "$IMPL.HANDLE.invokeExact(", 8);
         }
 
         writer.println("    }");
         writer.println();
     }
 
-    private void writeFunctionInnerClass(Method method) {
+    private void writeFunctionInnerClass(PrintWriter writer, Method method) {
         var methodName = method.name();
 
         // start of inner class and function descriptor
         writer.printf("    private static class %s$IMPL {%n", methodName);
         writer.print("        private static final FunctionDescriptor DESC = ");
-        writeFunctionDescriptor(method, null);
+        writeFunctionDescriptor(writer, method, null);
         writer.println(";");
 
         // method handle and end of inner class
         writer.printf("""
                                 private static final MethodHandle HANDLE = LINKER.downcallHandle(SYMBOL_LOOKUP.findOrThrow("%s"), DESC%s);
                             }
-                        
+
                         """,
                 method.nativeName(),
                 method.supportsLastError() ? ", LAST_ERROR_STATE" : "");
     }
 
-    private void writeFunctionDescriptorAndHandle(Method method) {
+    private void writeFunctionDescriptorAndHandle(PrintWriter writer, Method method) {
         var methodName = method.name();
         var supportsAllocator = method.supportsAllocator();
         var supportsLastError = method.supportsLastError();
@@ -164,22 +168,22 @@ class FunctionCodeWriter extends FunctionCodeWriterBase<Type> {
         var callStateNote2 = supportsLastError ? String.format(CALL_STATE_NOTE_2, position) : null;
 
         // descriptor accessor
-        writeCommentWithNotes(String.format("Gets the function descriptor for {@code %s}", method.nativeName()),
+        writeCommentWithNotes(writer, String.format("Gets the function descriptor for {@code %s}", method.nativeName()),
                 callStateNote1, callStateNote2);
         writer.printf("""
                     public static FunctionDescriptor %1$s$descriptor() {
                         return %1$s$IMPL.DESC;
                     }
-                
+
                 """, methodName);
 
         // handle accessor
-        writeComment("Gets the method handle for {@code %s}", method.nativeName());
+        writeComment(writer, "Gets the method handle for {@code %s}", method.nativeName());
         writer.printf("""
                     public static MethodHandle %1$s$handle() {
                         return %1$s$IMPL.HANDLE;
                     }
-                
+
                 """, methodName);
     }
 
@@ -192,11 +196,11 @@ class FunctionCodeWriter extends FunctionCodeWriterBase<Type> {
         return dll;
     }
 
-    void writeApiComment() {
-        writer.printf("""
+    void writeApiComment(JavaSourceFile<Type> file) {
+        file.writer().printf("""
                 /**
                  * Functions of namespace {@code %s}
                  */
-                """, namespace.name());
+                """, file.namespace().name());
     }
 }

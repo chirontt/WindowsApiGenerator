@@ -11,6 +11,7 @@ import net.codecrete.windowsapi.metadata.Namespace;
 import net.codecrete.windowsapi.metadata.Primitive;
 import net.codecrete.windowsapi.metadata.Type;
 
+import java.io.PrintWriter;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
@@ -39,33 +40,34 @@ class ConstantCodeWriter extends JavaCodeWriter<Type> {
      */
     void writeConstants(Namespace namespace, Collection<ConstantValue> constants) {
         var sortedConstants = constants.stream().sorted(Comparator.comparing(ConstantValue::name)).toList();
-        withFile(namespace, null, "Constants", () -> writeConstantsContent(sortedConstants));
+        withFile(namespace, null, "Constants", file -> writeConstantsContent(file, sortedConstants));
     }
 
-    void writeConstantsContent(Collection<ConstantValue> constants) {
+    void writeConstantsContent(JavaSourceFile<Type> file, Collection<ConstantValue> constants) {
+        var writer = file.writer();
         var needsArena = constants.stream().anyMatch(constant -> !(constant.value() instanceof Number));
         var hasGuids = constants.stream().anyMatch(constant -> constant.value() instanceof UUID);
         var hasPropertyKeys = constants.stream().anyMatch(ConstantCodeWriter::isPropertyKey);
 
         writer.printf("""
                 package %s;
-                
+
                 import java.lang.foreign.*;
-                
+
                 /**
                  * Constants of namespace %s.
                  */
                 public class Constants {
-                """, packageName, namespace.name());
+                """, file.packageName(), file.namespace().name());
 
         if (needsArena)
             writer.print("""
                         private static final Arena ARENA = Arena.ofAuto();
-                    
+
                     """);
 
         if (hasGuids)
-            writeCreateGuidMethod(4);
+            writeCreateGuidMethod(writer, 4);
 
         if (hasPropertyKeys)
             writer.print("""
@@ -76,42 +78,42 @@ class ConstantCodeWriter extends JavaCodeWriter<Type> {
                             seg.set(ValueLayout.JAVA_INT, 16, v3);
                             return seg;
                         }
-                    
+
                     """);
 
         for (var constant : constants)
-            writeConstant(constant);
+            writeConstant(writer, constant);
 
         writer.println("}");
     }
 
     private static final Set<String> POINTER_STRUCT_TYPES = Set.of("CONDITION_VARIABLE", "SRWLOCK", "INIT_ONCE");
 
-    private void writeConstant(ConstantValue constant) {
+    private void writeConstant(PrintWriter writer, ConstantValue constant) {
         var typeName = constant.type().name();
 
         switch (constant.value()) {
             case String ignored -> {
                 if (isPropertyKey(constant)) {
-                    writePropertyKey(constant);
+                    writePropertyKey(writer, constant);
                 } else if (typeName.equals("SID_IDENTIFIER_AUTHORITY")) {
-                    writeByteArrayConstant(constant);
+                    writeByteArrayConstant(writer, constant);
                 } else if (constant.name().equals("GUID_DATABASE_32K_PAGES_OPTIONAL_FEATURE_BYTE")) {
                     // Special case: this constant is defined as a string, but it is actually a byte array
-                    writeUTF16ByteArrayConstant(constant);
+                    writeUTF16ByteArrayConstant(writer, constant);
                 } else if (POINTER_STRUCT_TYPES.contains(typeName)) {
-                    writePointerStruct(constant);
+                    writePointerStruct(writer, constant);
                 } else {
-                    writeStringConstant(constant);
+                    writeStringConstant(writer, constant);
                 }
             }
-            case UUID ignored -> writeGuidConstant(constant);
-            case Number ignored -> writeNumericConstant(constant);
+            case UUID ignored -> writeGuidConstant(writer, constant);
+            case Number ignored -> writeNumericConstant(writer, constant);
             default -> throw new AssertionError("Unexpected constant type: " + constant.type());
         }
     }
 
-    private void writeNumericConstant(ConstantValue constant) {
+    private void writeNumericConstant(PrintWriter writer, ConstantValue constant) {
         String typeName;
         if (constant.type() instanceof Primitive primitive)
             typeName = CommentWriter.getPrimitiveCType(primitive);
@@ -121,12 +123,12 @@ class ConstantCodeWriter extends JavaCodeWriter<Type> {
         commentWriter.writeConstantComment(writer, constant, "Numeric", typeName);
 
         writer.printf("    public static final %s %s = ", getJavaType(constant.type()), constant.name());
-        writeValue(constant.type(), constant.value());
+        writeValue(writer, constant.type(), constant.value());
         writer.println(";");
         writer.println();
     }
 
-    private void writeStringConstant(ConstantValue constant) {
+    private void writeStringConstant(PrintWriter writer, ConstantValue constant) {
         var value = constant.value().toString();
         // FFM does not support Windows-1252 charset.
         // Ensure the string is the same in UTF-8.
@@ -147,22 +149,22 @@ class ConstantCodeWriter extends JavaCodeWriter<Type> {
         );
 
         commentWriter.writeConstantComment(writer, constant, "String", stringType);
-        writeMemorySegmentConstant(constant.name());
+        writeMemorySegmentConstant(writer, constant.name());
     }
 
-    private void writeGuidConstant(ConstantValue constant) {
-        writeGuidConstantMemorySegment(constant.name(), (UUID) constant.value(), 4);
+    private void writeGuidConstant(PrintWriter writer, ConstantValue constant) {
+        writeGuidConstantMemorySegment(writer, constant.name(), (UUID) constant.value(), 4);
 
         commentWriter.writeConstantComment(writer, constant, "GUID",
                 String.format("{@code {%s}}", constant.value()));
-        writeMemorySegmentConstant(constant.name());
+        writeMemorySegmentConstant(writer, constant.name());
     }
 
     private static boolean isPropertyKey(ConstantValue constant) {
         return constant.type().name().equals("PROPERTYKEY") || constant.type().name().equals("DEVPROPKEY");
     }
 
-    private void writePropertyKey(ConstantValue constant) {
+    private void writePropertyKey(PrintWriter writer, ConstantValue constant) {
         assert constant.value() instanceof String;
         var numbers = parseNumbers((String) constant.value());
         assert numbers.length == 12;
@@ -180,25 +182,25 @@ class ConstantCodeWriter extends JavaCodeWriter<Type> {
 
         writer.printf("""
                     private static final MemorySegment %s$SEG = createPropertyKey(%dL, %dL, %d);
-                
+
                 """, constant.name(), v1, v2, v3);
 
         commentWriter.writeConstantComment(writer, constant, "Property key", null);
-        writeMemorySegmentConstant(constant.name());
+        writeMemorySegmentConstant(writer, constant.name());
     }
 
-    private void writeByteArrayConstant(ConstantValue constant) {
+    private void writeByteArrayConstant(PrintWriter writer, ConstantValue constant) {
         var numbers = parseNumbers(constant.value().toString());
-        writeByteArrayConstant(constant, numbers);
+        writeByteArrayConstant(writer, constant, numbers);
     }
 
-    private void writeUTF16ByteArrayConstant(ConstantValue constant) {
+    private void writeUTF16ByteArrayConstant(PrintWriter writer, ConstantValue constant) {
         // writes a byte array that has been encoded as a UTF-16 string
         var bytes = constant.value().toString().chars().asLongStream().toArray();
-        writeByteArrayConstant(constant, bytes);
+        writeByteArrayConstant(writer, constant, bytes);
     }
 
-    private void writeByteArrayConstant(ConstantValue constant, long[] bytes) {
+    private void writeByteArrayConstant(PrintWriter writer, ConstantValue constant, long[] bytes) {
         writer.printf("    private static final MemorySegment %s$SEG = ARENA.allocateFrom(ValueLayout.JAVA_BYTE",
                 constant.name());
         for (var b : bytes) {
@@ -209,18 +211,18 @@ class ConstantCodeWriter extends JavaCodeWriter<Type> {
         writer.println();
 
         commentWriter.writeConstantComment(writer, constant, "Binary", null);
-        writeMemorySegmentConstant(constant.name());
+        writeMemorySegmentConstant(writer, constant.name());
     }
 
-    private void writePointerStruct(ConstantValue constant) {
+    private void writePointerStruct(PrintWriter writer, ConstantValue constant) {
         // The struct consists of a single pointer (address).
         writer.printf("""
                     private static final MemorySegment %s$SEG = ARENA.allocateFrom(ValueLayout.JAVA_LONG, %sL);
-                
+
                 """, constant.name(), constant.value());
 
         commentWriter.writeConstantComment(writer, constant, constant.type().name(), null);
-        writeMemorySegmentConstant(constant.name());
+        writeMemorySegmentConstant(writer, constant.name());
     }
 
     private static long[] parseNumbers(String value) {
@@ -232,12 +234,12 @@ class ConstantCodeWriter extends JavaCodeWriter<Type> {
         return Arrays.stream(numbers).map(Long::parseLong).mapToLong(Long::longValue).toArray();
     }
 
-    private void writeMemorySegmentConstant(String name) {
+    private void writeMemorySegmentConstant(PrintWriter writer, String name) {
         writer.printf("""
                     public static MemorySegment %1$s() {
                         return %1$s$SEG;
                     }
-                
+
                 """, name);
     }
 }
