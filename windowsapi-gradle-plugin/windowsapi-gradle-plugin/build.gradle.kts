@@ -2,7 +2,7 @@ import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 
 plugins {
-    id("com.gradle.plugin-publish") version "1.2.1"
+    id("com.gradle.plugin-publish") version "2.1.1"
 
     alias(libs.plugins.kotlin.jvm)
 
@@ -12,7 +12,7 @@ plugins {
 }
 
 group = "net.codecrete.windows-api"
-version = "0.8.5"
+version = "0.8.6"
 
 java {
     sourceCompatibility = JavaVersion.VERSION_21
