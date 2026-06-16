@@ -39,6 +39,45 @@ class WindowsApiRunTest {
     }
 
     @Test
+    void generateCode_writesReachabilityMetadataFile() throws IOException {
+        var temporaryFolder = Files.createTempDirectory("temporary-folder");
+        try {
+            var metadataFile = temporaryFolder.resolve("reachability-metadata.json");
+            var outputDirectory = temporaryFolder.resolve("output");
+            Files.createDirectories(outputDirectory);
+            var run = new WindowsApiRun();
+            run.setFunctions(Set.of("IsWindow"));
+            run.setOutputDirectory(outputDirectory);
+            run.setReachabilityMetadataFile(metadataFile);
+
+            run.generateCode();
+
+            assertThat(metadataFile).exists();
+            assertThat(Files.readString(metadataFile)).contains("\"downcalls\"").contains("void*");
+        } finally {
+            Testing.deleteDirectory(temporaryFolder);
+        }
+    }
+
+    @Test
+    void dryRun_doesNotWriteReachabilityMetadataFile() throws IOException {
+        var temporaryFolder = Files.createTempDirectory("temporary-folder");
+        try {
+            var metadataFile = temporaryFolder.resolve("reachability-metadata.json");
+            var run = new WindowsApiRun();
+            run.setFunctions(Set.of("IsWindow"));
+            run.setOutputDirectory(temporaryFolder.resolve("output"));
+            run.setReachabilityMetadataFile(metadataFile);
+
+            run.dryRun();
+
+            assertThat(metadataFile).doesNotExist();
+        } finally {
+            Testing.deleteDirectory(temporaryFolder);
+        }
+    }
+
+    @Test
     void createDirectory_succeeds() throws IOException {
         var temporaryFolder = Files.createTempDirectory("temporary-folder");
         try {

@@ -8,6 +8,8 @@ package net.codecrete.windowsapi;
 
 import net.codecrete.windowsapi.events.Event;
 import net.codecrete.windowsapi.events.EventListener;
+import net.codecrete.windowsapi.graalvm.ReachabilityMetadataBuilder;
+import net.codecrete.windowsapi.graalvm.ReachabilityMetadataWriter;
 import net.codecrete.windowsapi.winmd.MetadataBuilder;
 import net.codecrete.windowsapi.writer.CodeWriter;
 import net.codecrete.windowsapi.writer.FileSink;
@@ -47,6 +49,7 @@ public class WindowsApiRun {
     private String basePackage = "";
     private EventListener eventListener = new NullEventListener();
     private boolean downcallTracing = false;
+    private Path reachabilityMetadataFile;
 
     private Set<String> structs = new HashSet<>();
     private Set<String> functions = new HashSet<>();
@@ -143,6 +146,35 @@ public class WindowsApiRun {
      */
     public void setDowncallTracing(boolean downcallTracing) {
         this.downcallTracing = downcallTracing;
+    }
+
+    /**
+     * Gets the file for the generated GraalVM reachability metadata.
+     *
+     * @return the path of the file, or {@code null} if no metadata is generated
+     */
+    public Path getReachabilityMetadataFile() {
+        return reachabilityMetadataFile;
+    }
+
+    /**
+     * Sets the file for the generated GraalVM reachability metadata.
+     * <p>
+     * To compile an application that uses the generated code to native code with GraalVM,
+     * reachability metadata is required for the foreign function downcalls and upcalls.
+     * If a file is set, the reachability metadata for the generated functions, COM interface
+     * methods and callback functions is written to it (in JSON format).
+     * </p>
+     * <p>
+     * The path is independent of the {@link #getOutputDirectory() output directory} for the
+     * generated Java sources. The default is {@code null}, i.e., no metadata is generated.
+     * No metadata is written during a {@link #dryRun() dry run}.
+     * </p>
+     *
+     * @param reachabilityMetadataFile the path of the file, or {@code null} to disable generation
+     */
+    public void setReachabilityMetadataFile(Path reachabilityMetadataFile) {
+        this.reachabilityMetadataFile = reachabilityMetadataFile;
     }
 
     /**
@@ -326,6 +358,12 @@ public class WindowsApiRun {
 
         if (fileSink != null)
             deleteOldFiles(fileSink.generatedPaths());
+
+        if (!isDryRun && reachabilityMetadataFile != null) {
+            var reachabilityMetadata =
+                    new ReachabilityMetadataBuilder(scope.methods(), scope.getTransitiveTypeScope()).build();
+            new ReachabilityMetadataWriter().writeToFile(reachabilityMetadata, reachabilityMetadataFile);
+        }
     }
 
     private boolean isAnyWork() {

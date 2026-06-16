@@ -66,7 +66,12 @@ public class Scope {
         return constantSet;
     }
 
-    Set<Method> methods() {
+    /**
+     * Gets the functions of this scope.
+     *
+     * @return the functions
+     */
+    public Set<Method> methods() {
         return methodSet;
     }
 
@@ -292,7 +297,7 @@ public class Scope {
      *
      * @return types
      */
-    Set<Type> getTransitiveTypeScope() {
+    public Set<Type> getTransitiveTypeScope() {
         return transitiveScope;
     }
 
