@@ -37,6 +37,10 @@ public class EventLogger implements EventListener {
                 if (logger.isDebugEnabled())
                     logger.debug("Generated Java file " + path);
             }
+            case Event.ConfigurationFileGenerated(var path) -> {
+                if (logger.isDebugEnabled())
+                    logger.debug("Generated configuration file " + path);
+            }
             case DirectoryCreated(var path) -> {
                 if (logger.isDebugEnabled())
                     logger.debug("Created source directory " + path);

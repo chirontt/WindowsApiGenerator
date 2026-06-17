@@ -11,12 +11,14 @@ import net.codecrete.windowsapi.WindowsApiRun
 import org.gradle.api.DefaultTask
 import org.gradle.api.InvalidUserDataException
 import org.gradle.api.file.DirectoryProperty
+import org.gradle.api.file.RegularFileProperty
 import org.gradle.api.provider.ListProperty
 import org.gradle.api.provider.Property
 import org.gradle.api.tasks.CacheableTask
 import org.gradle.api.tasks.Input
 import org.gradle.api.tasks.Optional
 import org.gradle.api.tasks.OutputDirectory
+import org.gradle.api.tasks.OutputFile
 import org.gradle.api.tasks.TaskAction
 
 /**
@@ -96,6 +98,15 @@ abstract class WindowsApiTask : DefaultTask() {
     @get:Optional
     abstract val downcallTracing: Property<Boolean>
 
+    /**
+     * Path to reachability metadata JSON file.
+     *
+     * If this property is set, a reachability metadata file for GraalVM is generated.
+     */
+    @get:OutputFile
+    @get:Optional
+    abstract val reachabilityMetadataFile: RegularFileProperty
+
     @TaskAction
     fun generateCode() {
         val run = WindowsApiRun()
@@ -110,6 +121,8 @@ abstract class WindowsApiTask : DefaultTask() {
         run.outputDirectory = outputDirectory.get().asFile.toPath()
         run.basePackage = basePackage.get()
         run.downcallTracing = downcallTracing.get()
+        run.reachabilityMetadataFile = if (reachabilityMetadataFile.isPresent)
+            reachabilityMetadataFile.get().asFile.toPath() else null
 
         try {
             run.generateCode()

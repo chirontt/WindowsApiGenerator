@@ -133,6 +133,12 @@ public class WindowsApiGenerator extends AbstractMojo {
     @Parameter(name = "addAsTestSourceRoot", defaultValue = "false")
     boolean addAsTestSourceRoot;
 
+    /**
+     * Path to reachability metadata JSON file for GraalVM. If set, the file will be generated.
+     */
+    @Parameter(name = "reachabilityMetadataFile")
+    File reachabilityMetadataFile;
+
     public void execute() throws MojoExecutionException {
         try {
             var sourceFolder = Path.of(outputDirectory.toURI());
@@ -141,7 +147,10 @@ public class WindowsApiGenerator extends AbstractMojo {
                 sourceFolder = sourceFolder.resolve(sourceDirectoryPath);
             }
 
-            var run = createRun(sourceFolder);
+            var metadataFile = reachabilityMetadataFile != null
+                    ? Path.of(reachabilityMetadataFile.toURI()) : null;
+
+            var run = createRun(sourceFolder, metadataFile);
 
             run.createDirectory(sourceFolder.toAbsolutePath());
 
@@ -157,7 +166,7 @@ public class WindowsApiGenerator extends AbstractMojo {
         }
     }
 
-    private WindowsApiRun createRun(Path sourceFolder) {
+    private WindowsApiRun createRun(Path sourceFolder, Path reachabilityMetadataFile) throws MojoExecutionException {
         var run = new WindowsApiRun();
         run.setEventListener(new EventLogger(getLog()));
 
@@ -177,6 +186,7 @@ public class WindowsApiGenerator extends AbstractMojo {
         run.setOutputDirectory(sourceFolder);
         run.setBasePackage(basePackage != null ? basePackage : "");
         run.setDowncallTracing(downcallTracing);
+        run.setReachabilityMetadataFile(reachabilityMetadataFile);
         return run;
     }
 }

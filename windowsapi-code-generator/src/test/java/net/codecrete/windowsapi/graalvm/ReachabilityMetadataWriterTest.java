@@ -6,11 +6,8 @@
 //
 package net.codecrete.windowsapi.graalvm;
 
-import net.codecrete.windowsapi.graalvm.json.Downcall;
-import net.codecrete.windowsapi.graalvm.json.DowncallLinkerOptions;
-import net.codecrete.windowsapi.graalvm.json.ForeignApiConfiguration;
-import net.codecrete.windowsapi.graalvm.json.ReachabilityMetadata;
-import net.codecrete.windowsapi.graalvm.json.Upcall;
+import net.codecrete.windowsapi.SimpleEventListener;
+import net.codecrete.windowsapi.graalvm.json.*;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
@@ -23,7 +20,7 @@ class ReachabilityMetadataWriterTest {
 
     private String write(ReachabilityMetadata metadata) throws IOException {
         var writer = new StringWriter();
-        new ReachabilityMetadataWriter().write(metadata, writer);
+        new ReachabilityMetadataWriter(new SimpleEventListener()).write(metadata, writer);
         return writer.toString();
     }
 

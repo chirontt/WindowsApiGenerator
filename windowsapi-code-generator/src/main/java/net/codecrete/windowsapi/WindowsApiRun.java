@@ -362,7 +362,7 @@ public class WindowsApiRun {
         if (!isDryRun && reachabilityMetadataFile != null) {
             var reachabilityMetadata =
                     new ReachabilityMetadataBuilder(scope.methods(), scope.getTransitiveTypeScope()).build();
-            new ReachabilityMetadataWriter().writeToFile(reachabilityMetadata, reachabilityMetadataFile);
+            new ReachabilityMetadataWriter(eventListener).writeToFile(reachabilityMetadata, reachabilityMetadataFile);
         }
     }
 

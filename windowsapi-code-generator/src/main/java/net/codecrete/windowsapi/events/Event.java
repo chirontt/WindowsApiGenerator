@@ -24,6 +24,14 @@ public sealed interface Event {
     }
 
     /**
+     * Event notifying that a configuration file has been generated.
+     *
+     * @param path path to the configuration file
+     */
+    record ConfigurationFileGenerated(Path path) implements Event {
+    }
+
+    /**
      * Event notifying that a directory has been created.
      *
      * @param path path to the directory

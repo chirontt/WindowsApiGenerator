@@ -6,6 +6,8 @@
 //
 package net.codecrete.windowsapi.graalvm;
 
+import net.codecrete.windowsapi.events.Event;
+import net.codecrete.windowsapi.events.EventListener;
 import net.codecrete.windowsapi.graalvm.json.Downcall;
 import net.codecrete.windowsapi.graalvm.json.ReachabilityMetadata;
 import net.codecrete.windowsapi.graalvm.json.Upcall;
@@ -28,6 +30,17 @@ import java.util.List;
  */
 public final class ReachabilityMetadataWriter {
 
+    private EventListener eventListener;
+
+    /**
+     * Creates a new instance.
+     *
+     * @param eventListener event listener to notify (about generated files)
+     */
+    public ReachabilityMetadataWriter(EventListener eventListener) {
+        this.eventListener = eventListener;
+    }
+
     /**
      * Writes the reachability metadata to the given file.
      *
@@ -37,6 +50,7 @@ public final class ReachabilityMetadataWriter {
     public void writeToFile(ReachabilityMetadata metadata, Path file) {
         try (var writer = Files.newBufferedWriter(file, StandardCharsets.UTF_8)) {
             write(metadata, writer);
+            eventListener.onEvent(new Event.ConfigurationFileGenerated(file));
         } catch (IOException exc) {
             throw new UncheckedIOException("Unable to write reachability metadata to " + file, exc);
         }

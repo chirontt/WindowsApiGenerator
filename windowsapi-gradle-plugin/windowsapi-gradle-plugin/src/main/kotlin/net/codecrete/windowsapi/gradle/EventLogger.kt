@@ -17,6 +17,7 @@ class EventLogger(private val logger: Logger) : EventListener {
     override fun onEvent(event: Event) {
         when (event) {
             is Event.JavaSourceGenerated -> logger.info("Generated java file {}", event.path)
+            is Event.ConfigurationFileGenerated -> logger.info("Generated configuration file {}", event.path)
             is Event.DirectoryCreated -> logger.info("Created source directory {}", event.path)
             is Event.FileDeleted -> logger.info("File deleted {}", event.path)
             is Event.DirectoryDeleted -> logger.info("Directory deleted {}", event.path)

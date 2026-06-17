@@ -15,6 +15,7 @@ public class SimpleEventListener implements EventListener {
     public void onEvent(Event event) {
         switch (event) {
             case Event.JavaSourceGenerated(var path) -> System.out.println("File generated: " + path);
+            case Event.ConfigurationFileGenerated(var path) -> System.out.println("Configuration file generated: " + path);
             case Event.InvalidArgument(var ignored1, var ignored2, var reason) ->
                     System.out.println("Error: " + reason);
             case Event.DirectoryCreated(var path) -> System.out.println("Directory created: " + path);

@@ -12,7 +12,7 @@ plugins {
 }
 
 group = "net.codecrete.windows-api"
-version = "0.8.6"
+version = "0.8.5"
 
 java {
     sourceCompatibility = JavaVersion.VERSION_21
