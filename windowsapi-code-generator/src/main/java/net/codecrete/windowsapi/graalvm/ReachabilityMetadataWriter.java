@@ -9,6 +9,7 @@ package net.codecrete.windowsapi.graalvm;
 import net.codecrete.windowsapi.events.Event;
 import net.codecrete.windowsapi.events.EventListener;
 import net.codecrete.windowsapi.graalvm.json.Downcall;
+import net.codecrete.windowsapi.graalvm.json.JsonWriter;
 import net.codecrete.windowsapi.graalvm.json.Method;
 import net.codecrete.windowsapi.graalvm.json.ReachabilityMetadata;
 import net.codecrete.windowsapi.graalvm.json.ReflectionObject;
@@ -25,12 +26,13 @@ import java.util.List;
 /**
  * Writes {@link ReachabilityMetadata} as a pretty-printed JSON file.
  * <p>
- * The output is hand-rolled to keep the generator free of external dependencies.
- * The {@code foreign} section is always emitted; the {@code reflection} section is
+ * The JSON is produced with the {@code org.cthing:jsonwriter} library. The
+ * {@code foreign} section is always emitted; the {@code reflection} section is
  * only emitted if it contains at least one entry. The {@code linkerOptions} object
  * of a downcall is only written if {@code captureCallState} is {@code true}.
  * </p>
  */
+@SuppressWarnings("java:S1192")
 public final class ReachabilityMetadataWriter {
 
     private final EventListener eventListener;
@@ -67,133 +69,84 @@ public final class ReachabilityMetadataWriter {
      * @throws IOException if writing fails
      */
     void write(ReachabilityMetadata metadata, Writer writer) throws IOException {
+        var json = new JsonWriter(writer);
+        json.openObject();
+
         var foreign = metadata.foreign();
+        json.memberName("foreign");
+        json.openObject();
+        writeDowncalls(json, foreign.downcalls());
+        writeUpcalls(json, foreign.upcalls());
+        json.closeObject();
+
         var reflection = metadata.reflection();
-        var hasReflection = reflection != null && !reflection.isEmpty();
-
-        writer.write("{\n");
-        writer.write("  \"foreign\": {\n");
-        writeDowncalls(writer, foreign.downcalls());
-        writer.write(",\n");
-        writeUpcalls(writer, foreign.upcalls());
-        writer.write("\n");
-        writer.write(hasReflection ? "  },\n" : "  }\n");
-        if (hasReflection) {
-            writeReflection(writer, reflection);
-            writer.write("\n");
+        if (reflection != null && !reflection.isEmpty()) {
+            writeReflection(json, reflection);
         }
-        writer.write("}\n");
+
+        json.closeObject();
+        json.flush();
     }
 
-    private void writeReflection(Writer writer, List<ReflectionObject> reflection) throws IOException {
-        writer.write("  \"reflection\": [\n");
-        for (var i = 0; i < reflection.size(); i += 1) {
-            var object = reflection.get(i);
-            writer.write("    {\n");
-            writer.write("      \"type\": ");
-            writeString(writer, object.type());
-            writer.write(",\n");
-            writer.write("      \"methods\": [\n");
-            writeReflectionMethods(writer, object.methods());
-            writer.write("      ]\n");
-            writer.write(i < reflection.size() - 1 ? "    },\n" : "    }\n");
-        }
-        writer.write("  ]");
-    }
-
-    private void writeReflectionMethods(Writer writer, List<Method> methods) throws IOException {
-        for (var i = 0; i < methods.size(); i += 1) {
-            var method = methods.get(i);
-            writer.write("        {\n");
-            writer.write("          \"name\": ");
-            writeString(writer, method.name());
-            writer.write(",\n");
-            writer.write("          \"parameterTypes\": ");
-            writeStringArray(writer, method.parameterTypes());
-            writer.write("\n");
-            writer.write(i < methods.size() - 1 ? "        },\n" : "        }\n");
-        }
-    }
-
-    private void writeDowncalls(Writer writer, List<Downcall> downcalls) throws IOException {
-        writer.write("    \"downcalls\": ");
-        if (downcalls.isEmpty()) {
-            writer.write("[]");
+    private void writeDowncalls(JsonWriter json, List<Downcall> downcalls) throws IOException {
+        if (downcalls == null || downcalls.isEmpty())
             return;
-        }
 
-        writer.write("[\n");
-        for (var i = 0; i < downcalls.size(); i += 1) {
-            var downcall = downcalls.get(i);
-            writer.write("      {\n");
-            writer.write("        \"returnType\": ");
-            writeString(writer, downcall.returnType());
-            writer.write(",\n");
-            writer.write("        \"parameterTypes\": ");
-            writeStringArray(writer, downcall.parameterTypes());
+        json.memberName("downcalls").openArray();
+        for (var downcall : downcalls) {
+            json.openObject().member("returnType", downcall.returnType());
+            writeStringArray(json, "parameterTypes", downcall.parameterTypes());
             if (downcall.linkerOptions().captureCallState()) {
-                writer.write(",\n");
-                writer.write("        \"options\": {\n");
-                writer.write("          \"captureCallState\": true\n");
-                writer.write("        }\n");
-            } else {
-                writer.write("\n");
+                json.memberName("options");
+                json.openObject().member("captureCallState", true).closeObject();
             }
-            writer.write(i < downcalls.size() - 1 ? "      },\n" : "      }\n");
+            json.closeObject();
         }
-        writer.write("    ]");
+        json.closeArray();
     }
 
-    private void writeUpcalls(Writer writer, List<Upcall> upcalls) throws IOException {
-        writer.write("    \"upcalls\": ");
-        if (upcalls.isEmpty()) {
-            writer.write("[]");
+    private void writeUpcalls(JsonWriter json, List<Upcall> upcalls) throws IOException {
+        if (upcalls == null || upcalls.isEmpty())
             return;
-        }
 
-        writer.write("[\n");
-        for (var i = 0; i < upcalls.size(); i += 1) {
-            var upcall = upcalls.get(i);
-            writer.write("      {\n");
-            writer.write("        \"returnType\": ");
-            writeString(writer, upcall.returnType());
-            writer.write(",\n");
-            writer.write("        \"parameterTypes\": ");
-            writeStringArray(writer, upcall.parameterTypes());
-            writer.write("\n");
-            writer.write(i < upcalls.size() - 1 ? "      },\n" : "      }\n");
+        json.memberName("upcalls").openArray();
+        for (var upcall : upcalls) {
+            json.openObject();
+            json.member("returnType", upcall.returnType());
+            writeStringArray(json, "parameterTypes", upcall.parameterTypes());
+            json.closeObject();
         }
-        writer.write("    ]");
+        json.closeArray();
     }
 
-    private void writeStringArray(Writer writer, List<String> values) throws IOException {
-        writer.write('[');
-        for (var i = 0; i < values.size(); i += 1) {
-            if (i > 0)
-                writer.write(", ");
-            writeString(writer, values.get(i));
+    private void writeReflection(JsonWriter json, List<ReflectionObject> reflection) throws IOException {
+        json.memberName("reflection").openArray();
+        for (var object : reflection) {
+            json.openObject();
+            json.member("type", object.type());
+            writeReflectionMethods(json, object.methods());
+            json.closeObject();
         }
-        writer.write(']');
+        json.closeArray();
     }
 
-    private void writeString(Writer writer, String value) throws IOException {
-        writer.write('"');
-        for (var i = 0; i < value.length(); i += 1) {
-            var c = value.charAt(i);
-            switch (c) {
-                case '"' -> writer.write("\\\"");
-                case '\\' -> writer.write("\\\\");
-                case '\n' -> writer.write("\\n");
-                case '\r' -> writer.write("\\r");
-                case '\t' -> writer.write("\\t");
-                default -> {
-                    if (c < 0x20)
-                        writer.write(String.format("\\u%04x", (int) c));
-                    else
-                        writer.write(c);
-                }
-            }
+    private void writeReflectionMethods(JsonWriter json, List<Method> methods) throws IOException {
+        json.memberName("methods").openArray();
+        for (var method : methods) {
+            json.openObject();
+            json.member("name", method.name());
+            writeStringArray(json, "parameterTypes", method.parameterTypes());
+            json.closeObject();
         }
-        writer.write('"');
+        json.closeArray();
+    }
+
+    private void writeStringArray(JsonWriter json, String name, List<String> values) throws IOException {
+        json.memberName(name);
+        json.openArray();
+        for (var value : values) {
+            json.value(value);
+        }
+        json.closeArray();
     }
 }

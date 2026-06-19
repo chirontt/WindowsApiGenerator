@@ -21,21 +21,9 @@ class ReachabilityMetadataWriterTest {
     private String write(ReachabilityMetadata metadata) throws IOException {
         var writer = new StringWriter();
         new ReachabilityMetadataWriter(new SimpleEventListener()).write(metadata, writer);
-        return writer.toString();
-    }
-
-    @Test
-    void write_emptyConfiguration_producesEmptyArrays() throws IOException {
-        var metadata = new ReachabilityMetadata(new ForeignApiConfiguration(List.of(), List.of()), null);
-
-        assertThat(write(metadata)).isEqualTo("""
-                {
-                  "foreign": {
-                    "downcalls": [],
-                    "upcalls": []
-                  }
-                }
-                """);
+        // Normalize platform line separators (the JSON writer emits the platform separator,
+        // e.g. CRLF on Windows) so the expectations below can use plain LF text blocks.
+        return writer.toString().replace("\r\n", "\n");
     }
 
     @Test
@@ -51,22 +39,25 @@ class ReachabilityMetadataWriterTest {
 
         assertThat(write(metadata)).isEqualTo("""
                 {
-                  "foreign": {
-                    "downcalls": [
-                      {
-                        "returnType": "void",
-                        "parameterTypes": []
-                      },
-                      {
-                        "returnType": "jint",
-                        "parameterTypes": ["void*", "struct(jchar, padding(7), void*)"],
-                        "options": {
-                          "captureCallState": true
-                        }
-                      }
-                    ],
-                    "upcalls": []
-                  }
+                    "foreign": {
+                        "downcalls": [
+                            {
+                                "returnType": "void",
+                                "parameterTypes": [
+                                ]
+                            },
+                            {
+                                "returnType": "jint",
+                                "parameterTypes": [
+                                    "void*",
+                                    "struct(jchar, padding(7), void*)"
+                                ],
+                                "options": {
+                                    "captureCallState": true
+                                }
+                            }
+                        ]
+                    }
                 }
                 """);
     }
@@ -82,21 +73,24 @@ class ReachabilityMetadataWriterTest {
 
         assertThat(write(metadata)).isEqualTo("""
                 {
-                  "foreign": {
-                    "downcalls": [],
-                    "upcalls": []
-                  },
-                  "reflection": [
-                    {
-                      "type": "windows.win32.ui.windowsandmessaging.WNDPROC$Function",
-                      "methods": [
+                    "foreign": {
+                    },
+                    "reflection": [
                         {
-                          "name": "invoke",
-                          "parameterTypes": ["java.lang.foreign.MemorySegment", "int", "long", "long"]
+                            "type": "windows.win32.ui.windowsandmessaging.WNDPROC$Function",
+                            "methods": [
+                                {
+                                    "name": "invoke",
+                                    "parameterTypes": [
+                                        "java.lang.foreign.MemorySegment",
+                                        "int",
+                                        "long",
+                                        "long"
+                                    ]
+                                }
+                            ]
                         }
-                      ]
-                    }
-                  ]
+                    ]
                 }
                 """);
     }
@@ -108,10 +102,8 @@ class ReachabilityMetadataWriterTest {
 
         assertThat(write(metadata)).isEqualTo("""
                 {
-                  "foreign": {
-                    "downcalls": [],
-                    "upcalls": []
-                  }
+                    "foreign": {
+                    }
                 }
                 """);
     }
@@ -125,15 +117,17 @@ class ReachabilityMetadataWriterTest {
 
         assertThat(write(metadata)).isEqualTo("""
                 {
-                  "foreign": {
-                    "downcalls": [],
-                    "upcalls": [
-                      {
-                        "returnType": "jlong",
-                        "parameterTypes": ["void*", "jint"]
-                      }
-                    ]
-                  }
+                    "foreign": {
+                        "upcalls": [
+                            {
+                                "returnType": "jlong",
+                                "parameterTypes": [
+                                    "void*",
+                                    "jint"
+                                ]
+                            }
+                        ]
+                    }
                 }
                 """);
     }
