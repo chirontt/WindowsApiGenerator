@@ -89,7 +89,7 @@ public final class ReachabilityMetadataBuilder {
                 upcalls.add(toUpcall(delegate.signature()));
         }
 
-        return new ReachabilityMetadata(new ForeignApiConfiguration(List.copyOf(downcalls), List.copyOf(upcalls)));
+        return new ReachabilityMetadata(new ForeignApiConfiguration(List.copyOf(downcalls), List.copyOf(upcalls)), null);
     }
 
     private static Downcall toDowncall(Method method, boolean comMethod) {

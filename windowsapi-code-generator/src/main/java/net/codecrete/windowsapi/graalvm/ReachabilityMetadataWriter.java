@@ -30,7 +30,7 @@ import java.util.List;
  */
 public final class ReachabilityMetadataWriter {
 
-    private EventListener eventListener;
+    private final EventListener eventListener;
 
     /**
      * Creates a new instance.
@@ -93,7 +93,7 @@ public final class ReachabilityMetadataWriter {
             writeStringArray(writer, downcall.parameterTypes());
             if (downcall.linkerOptions().captureCallState()) {
                 writer.write(",\n");
-                writer.write("        \"linkerOptions\": {\n");
+                writer.write("        \"options\": {\n");
                 writer.write("          \"captureCallState\": true\n");
                 writer.write("        }\n");
             } else {

@@ -26,7 +26,7 @@ class ReachabilityMetadataWriterTest {
 
     @Test
     void write_emptyConfiguration_producesEmptyArrays() throws IOException {
-        var metadata = new ReachabilityMetadata(new ForeignApiConfiguration(List.of(), List.of()));
+        var metadata = new ReachabilityMetadata(new ForeignApiConfiguration(List.of(), List.of()), null);
 
         assertThat(write(metadata)).isEqualTo("""
                 {
@@ -46,7 +46,8 @@ class ReachabilityMetadataWriterTest {
                         new Downcall("jint", List.of("void*", "struct(jchar, padding(7), void*)"),
                                 new DowncallLinkerOptions(true))
                 ),
-                List.of()));
+                List.of()),
+                null);
 
         assertThat(write(metadata)).isEqualTo("""
                 {
@@ -59,7 +60,7 @@ class ReachabilityMetadataWriterTest {
                       {
                         "returnType": "jint",
                         "parameterTypes": ["void*", "struct(jchar, padding(7), void*)"],
-                        "linkerOptions": {
+                        "options": {
                           "captureCallState": true
                         }
                       }
@@ -74,7 +75,8 @@ class ReachabilityMetadataWriterTest {
     void write_upcalls_haveNoLinkerOptions() throws IOException {
         var metadata = new ReachabilityMetadata(new ForeignApiConfiguration(
                 List.of(),
-                List.of(new Upcall("jlong", List.of("void*", "jint")))));
+                List.of(new Upcall("jlong", List.of("void*", "jint")))),
+                null);
 
         assertThat(write(metadata)).isEqualTo("""
                 {
