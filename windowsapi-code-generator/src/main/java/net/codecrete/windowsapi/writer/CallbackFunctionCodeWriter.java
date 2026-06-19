@@ -11,6 +11,8 @@ import net.codecrete.windowsapi.metadata.Method;
 
 import java.io.PrintWriter;
 
+import static net.codecrete.windowsapi.naming.JavaNaming.toJavaClassName;
+
 /**
  * Creates the Java code for a callback function.
  */

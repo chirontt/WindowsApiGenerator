@@ -11,6 +11,8 @@ import net.codecrete.windowsapi.metadata.Type;
 
 import java.io.PrintWriter;
 
+import static net.codecrete.windowsapi.naming.JavaNaming.getJavaType;
+
 /**
  * Base class for code writers generating function descriptors and calls.
  *

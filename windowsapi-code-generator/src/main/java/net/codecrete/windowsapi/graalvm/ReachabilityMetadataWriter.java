@@ -9,7 +9,9 @@ package net.codecrete.windowsapi.graalvm;
 import net.codecrete.windowsapi.events.Event;
 import net.codecrete.windowsapi.events.EventListener;
 import net.codecrete.windowsapi.graalvm.json.Downcall;
+import net.codecrete.windowsapi.graalvm.json.Method;
 import net.codecrete.windowsapi.graalvm.json.ReachabilityMetadata;
+import net.codecrete.windowsapi.graalvm.json.ReflectionObject;
 import net.codecrete.windowsapi.graalvm.json.Upcall;
 
 import java.io.IOException;
@@ -24,7 +26,8 @@ import java.util.List;
  * Writes {@link ReachabilityMetadata} as a pretty-printed JSON file.
  * <p>
  * The output is hand-rolled to keep the generator free of external dependencies.
- * Only the {@code foreign} section is emitted. The {@code linkerOptions} object
+ * The {@code foreign} section is always emitted; the {@code reflection} section is
+ * only emitted if it contains at least one entry. The {@code linkerOptions} object
  * of a downcall is only written if {@code captureCallState} is {@code true}.
  * </p>
  */
@@ -65,14 +68,51 @@ public final class ReachabilityMetadataWriter {
      */
     void write(ReachabilityMetadata metadata, Writer writer) throws IOException {
         var foreign = metadata.foreign();
+        var reflection = metadata.reflection();
+        var hasReflection = reflection != null && !reflection.isEmpty();
+
         writer.write("{\n");
         writer.write("  \"foreign\": {\n");
         writeDowncalls(writer, foreign.downcalls());
         writer.write(",\n");
         writeUpcalls(writer, foreign.upcalls());
         writer.write("\n");
-        writer.write("  }\n");
+        writer.write(hasReflection ? "  },\n" : "  }\n");
+        if (hasReflection) {
+            writeReflection(writer, reflection);
+            writer.write("\n");
+        }
         writer.write("}\n");
+    }
+
+    private void writeReflection(Writer writer, List<ReflectionObject> reflection) throws IOException {
+        writer.write("  \"reflection\": [\n");
+        for (var i = 0; i < reflection.size(); i += 1) {
+            var object = reflection.get(i);
+            writer.write("    {\n");
+            writer.write("      \"type\": ");
+            writeString(writer, object.type());
+            writer.write(",\n");
+            writer.write("      \"methods\": [\n");
+            writeReflectionMethods(writer, object.methods());
+            writer.write("      ]\n");
+            writer.write(i < reflection.size() - 1 ? "    },\n" : "    }\n");
+        }
+        writer.write("  ]");
+    }
+
+    private void writeReflectionMethods(Writer writer, List<Method> methods) throws IOException {
+        for (var i = 0; i < methods.size(); i += 1) {
+            var method = methods.get(i);
+            writer.write("        {\n");
+            writer.write("          \"name\": ");
+            writeString(writer, method.name());
+            writer.write(",\n");
+            writer.write("          \"parameterTypes\": ");
+            writeStringArray(writer, method.parameterTypes());
+            writer.write("\n");
+            writer.write(i < methods.size() - 1 ? "        },\n" : "        }\n");
+        }
     }
 
     private void writeDowncalls(Writer writer, List<Downcall> downcalls) throws IOException {

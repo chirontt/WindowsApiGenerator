@@ -72,6 +72,51 @@ class ReachabilityMetadataWriterTest {
     }
 
     @Test
+    void write_reflection_emitsTypesAndMethods() throws IOException {
+        var metadata = new ReachabilityMetadata(
+                new ForeignApiConfiguration(List.of(), List.of()),
+                List.of(new ReflectionObject(
+                        "windows.win32.ui.windowsandmessaging.WNDPROC$Function",
+                        List.of(new Method("invoke",
+                                List.of("java.lang.foreign.MemorySegment", "int", "long", "long"))))));
+
+        assertThat(write(metadata)).isEqualTo("""
+                {
+                  "foreign": {
+                    "downcalls": [],
+                    "upcalls": []
+                  },
+                  "reflection": [
+                    {
+                      "type": "windows.win32.ui.windowsandmessaging.WNDPROC$Function",
+                      "methods": [
+                        {
+                          "name": "invoke",
+                          "parameterTypes": ["java.lang.foreign.MemorySegment", "int", "long", "long"]
+                        }
+                      ]
+                    }
+                  ]
+                }
+                """);
+    }
+
+    @Test
+    void write_emptyReflection_omitsReflectionKey() throws IOException {
+        var metadata = new ReachabilityMetadata(
+                new ForeignApiConfiguration(List.of(), List.of()), List.of());
+
+        assertThat(write(metadata)).isEqualTo("""
+                {
+                  "foreign": {
+                    "downcalls": [],
+                    "upcalls": []
+                  }
+                }
+                """);
+    }
+
+    @Test
     void write_upcalls_haveNoLinkerOptions() throws IOException {
         var metadata = new ReachabilityMetadata(new ForeignApiConfiguration(
                 List.of(),

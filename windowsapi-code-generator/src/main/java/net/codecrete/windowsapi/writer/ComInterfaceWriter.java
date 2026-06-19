@@ -14,6 +14,8 @@ import net.codecrete.windowsapi.metadata.PrimitiveKind;
 import net.codecrete.windowsapi.metadata.Type;
 import net.codecrete.windowsapi.metadata.TypeAlias;
 
+import static net.codecrete.windowsapi.naming.JavaNaming.toJavaClassName;
+
 /**
  * Creates the Java code for COM interfaces.
  */

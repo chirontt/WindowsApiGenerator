@@ -8,6 +8,8 @@ package net.codecrete.windowsapi.graalvm;
 
 import net.codecrete.windowsapi.graalvm.json.Downcall;
 import net.codecrete.windowsapi.graalvm.json.DowncallLinkerOptions;
+import net.codecrete.windowsapi.graalvm.json.Method;
+import net.codecrete.windowsapi.graalvm.json.ReflectionObject;
 import net.codecrete.windowsapi.graalvm.json.Upcall;
 import net.codecrete.windowsapi.metadata.Metadata;
 import net.codecrete.windowsapi.winmd.MetadataBuilder;
@@ -40,7 +42,7 @@ class ReachabilityMetadataBuilderTest {
     void build_createsDowncallsForFunctionsAndComMethods() {
         var scope = scope(Set.of("RegisterClassW", "GetProcessMemoryInfo", "EnumWindows"), Set.of("IUnknown"));
 
-        var reachabilityMetadata = new ReachabilityMetadataBuilder(scope.methods(), scope.getTransitiveTypeScope()).build();
+        var reachabilityMetadata = new ReachabilityMetadataBuilder(scope.methods(), scope.getTransitiveTypeScope(), "").build();
 
         // sorted by returnType, then parameterTypes, then captureCallState
         assertThat(reachabilityMetadata.foreign().downcalls()).containsExactly(
@@ -61,7 +63,7 @@ class ReachabilityMetadataBuilderTest {
     void build_createsUpcallsForCallbackFunctions() {
         var scope = scope(Set.of("RegisterClassW", "EnumWindows"), Set.of());
 
-        var reachabilityMetadata = new ReachabilityMetadataBuilder(scope.methods(), scope.getTransitiveTypeScope()).build();
+        var reachabilityMetadata = new ReachabilityMetadataBuilder(scope.methods(), scope.getTransitiveTypeScope(), "").build();
 
         assertThat(reachabilityMetadata.foreign().upcalls()).containsExactly(
                 // WNDENUMPROC(HWND, LPARAM) returning BOOL
@@ -72,11 +74,32 @@ class ReachabilityMetadataBuilderTest {
     }
 
     @Test
+    void build_createsReflectionEntryPerDelegate() {
+        var scope = scope(Set.of("RegisterClassW", "EnumWindows"), Set.of());
+
+        var reachabilityMetadata = new ReachabilityMetadataBuilder(scope.methods(), scope.getTransitiveTypeScope(), "com.example").build();
+
+        // one entry per delegate (not deduplicated by signature), sorted by fully-qualified type name
+        assertThat(reachabilityMetadata.reflection()).containsExactly(
+                // WNDENUMPROC(HWND, LPARAM)
+                new ReflectionObject(
+                        "com.example.windows.win32.ui.windowsandmessaging.WNDENUMPROC$Function",
+                        List.of(new Method("invoke",
+                                List.of("java.lang.foreign.MemorySegment", "long")))),
+                // WNDPROC(HWND, UINT, WPARAM, LPARAM)
+                new ReflectionObject(
+                        "com.example.windows.win32.ui.windowsandmessaging.WNDPROC$Function",
+                        List.of(new Method("invoke",
+                                List.of("java.lang.foreign.MemorySegment", "int", "long", "long"))))
+        );
+    }
+
+    @Test
     void build_deduplicatesIdenticalSignatures() {
         // both take a single HWND pointer and return BOOL, so they collapse into one downcall
         var scope = scope(Set.of("IsWindow", "IsWindowVisible"), Set.of());
 
-        var reachabilityMetadata = new ReachabilityMetadataBuilder(scope.methods(), scope.getTransitiveTypeScope()).build();
+        var reachabilityMetadata = new ReachabilityMetadataBuilder(scope.methods(), scope.getTransitiveTypeScope(), "").build();
 
         assertThat(reachabilityMetadata.foreign().downcalls())
                 .containsExactly(new Downcall("jint", List.of("void*"), NO_CAPTURE));
@@ -86,8 +109,8 @@ class ReachabilityMetadataBuilderTest {
     void build_isDeterministic() {
         var scope = scope(Set.of("RegisterClassW", "GetProcessMemoryInfo", "EnumWindows"), Set.of("IUnknown"));
 
-        var first = new ReachabilityMetadataBuilder(scope.methods(), scope.getTransitiveTypeScope()).build();
-        var second = new ReachabilityMetadataBuilder(scope.methods(), scope.getTransitiveTypeScope()).build();
+        var first = new ReachabilityMetadataBuilder(scope.methods(), scope.getTransitiveTypeScope(), "").build();
+        var second = new ReachabilityMetadataBuilder(scope.methods(), scope.getTransitiveTypeScope(), "").build();
 
         assertThat(first).isEqualTo(second);
     }
@@ -96,9 +119,10 @@ class ReachabilityMetadataBuilderTest {
     void build_withEmptyScope_producesEmptyConfiguration() {
         var scope = scope(Set.of(), Set.of());
 
-        var reachabilityMetadata = new ReachabilityMetadataBuilder(scope.methods(), scope.getTransitiveTypeScope()).build();
+        var reachabilityMetadata = new ReachabilityMetadataBuilder(scope.methods(), scope.getTransitiveTypeScope(), "").build();
 
         assertThat(reachabilityMetadata.foreign().downcalls()).isEmpty();
         assertThat(reachabilityMetadata.foreign().upcalls()).isEmpty();
+        assertThat(reachabilityMetadata.reflection()).isEmpty();
     }
 }

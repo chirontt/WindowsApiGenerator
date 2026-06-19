@@ -10,11 +10,13 @@ import net.codecrete.windowsapi.graalvm.json.Downcall;
 import net.codecrete.windowsapi.graalvm.json.DowncallLinkerOptions;
 import net.codecrete.windowsapi.graalvm.json.ForeignApiConfiguration;
 import net.codecrete.windowsapi.graalvm.json.ReachabilityMetadata;
+import net.codecrete.windowsapi.graalvm.json.ReflectionObject;
 import net.codecrete.windowsapi.graalvm.json.Upcall;
 import net.codecrete.windowsapi.metadata.ComInterface;
 import net.codecrete.windowsapi.metadata.Delegate;
 import net.codecrete.windowsapi.metadata.Method;
 import net.codecrete.windowsapi.metadata.Type;
+import net.codecrete.windowsapi.naming.JavaNaming;
 
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -52,18 +54,24 @@ public final class ReachabilityMetadataBuilder {
             Comparator.comparing(Upcall::returnType)
                     .thenComparing(Upcall::parameterTypes, PARAMETER_TYPES_COMPARATOR);
 
+    private static final Comparator<ReflectionObject> REFLECTION_COMPARATOR =
+            Comparator.comparing(ReflectionObject::type);
+
     private final Set<Method> functions;
     private final Set<Type> transitiveTypes;
+    private final String basePackage;
 
     /**
      * Creates a new instance.
      *
      * @param functions       the functions in scope
      * @param transitiveTypes the transitive type scope (containing COM interfaces and callback functions)
+     * @param basePackage     the base package name for the generated Java code (may be empty)
      */
-    public ReachabilityMetadataBuilder(Set<Method> functions, Set<Type> transitiveTypes) {
+    public ReachabilityMetadataBuilder(Set<Method> functions, Set<Type> transitiveTypes, String basePackage) {
         this.functions = functions;
         this.transitiveTypes = transitiveTypes;
+        this.basePackage = basePackage;
     }
 
     /**
@@ -84,12 +92,18 @@ public final class ReachabilityMetadataBuilder {
         }
 
         var upcalls = new TreeSet<>(UPCALL_COMPARATOR);
+        // Unlike upcalls, reflection entries are not deduplicated by signature: each delegate
+        // generates its own callback class that must be registered for reflective access.
+        var reflection = new TreeSet<>(REFLECTION_COMPARATOR);
         for (var type : transitiveTypes) {
-            if (type instanceof Delegate delegate)
+            if (type instanceof Delegate delegate) {
                 upcalls.add(toUpcall(delegate.signature()));
+                reflection.add(toReflectionObject(delegate));
+            }
         }
 
-        return new ReachabilityMetadata(new ForeignApiConfiguration(List.copyOf(downcalls), List.copyOf(upcalls)), null);
+        var foreign = new ForeignApiConfiguration(List.copyOf(downcalls), List.copyOf(upcalls));
+        return new ReachabilityMetadata(foreign, List.copyOf(reflection));
     }
 
     private static Downcall toDowncall(Method method, boolean comMethod) {
@@ -111,5 +125,19 @@ public final class ReachabilityMetadataBuilder {
             parameterTypes.add(LayoutDescriptor.of(parameter.type()));
 
         return new Upcall(LayoutDescriptor.ofReturnType(signature), List.copyOf(parameterTypes));
+    }
+
+    private ReflectionObject toReflectionObject(Delegate delegate) {
+        var packageName = JavaNaming.toJavaPackageName(basePackage, delegate.namespace().name());
+        var className = JavaNaming.toJavaClassName(delegate.name());
+        var type = packageName + "." + className + "$Function";
+
+        // The "invoke" method mirrors the delegate's Java parameters; the return type is irrelevant.
+        var parameterTypes = new ArrayList<String>();
+        for (var parameter : delegate.signature().parameters())
+            parameterTypes.add(JavaNaming.getFullyQualifiedJavaType(parameter.type()));
+
+        var method = new net.codecrete.windowsapi.graalvm.json.Method("invoke", List.copyOf(parameterTypes));
+        return new ReflectionObject(type, List.of(method));
     }
 }

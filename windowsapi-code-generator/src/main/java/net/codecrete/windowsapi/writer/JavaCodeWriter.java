@@ -17,14 +17,16 @@ import net.codecrete.windowsapi.metadata.PrimitiveKind;
 import net.codecrete.windowsapi.metadata.Struct;
 import net.codecrete.windowsapi.metadata.Type;
 import net.codecrete.windowsapi.metadata.TypeAlias;
+import net.codecrete.windowsapi.naming.JavaNaming;
 import net.codecrete.windowsapi.winmd.LayoutRequirement;
 
 import java.io.PrintWriter;
 import java.nio.file.Path;
-import java.util.Locale;
 import java.util.Set;
 import java.util.UUID;
 import java.util.function.Consumer;
+
+import static net.codecrete.windowsapi.naming.JavaNaming.toJavaClassName;
 
 /**
  * Base class for generating Java code.
@@ -94,33 +96,13 @@ class JavaCodeWriter<T extends Type> {
     }
 
     /**
-     * Creates a valid Java class name for the given type name.
-     * <p>
-     * Both names are without package / namespace name.
-     * </p>
-     *
-     * @param typeName the type name
-     * @return the Java class name
-     */
-    static String toJavaClassName(String typeName) {
-        // "AVIStreamHeader" and "AVISTREAMHEADER" conflict with each other
-        // when the associated Java file is created as they only differ in case.
-        if (typeName.equals("AVISTREAMHEADER"))
-            return "AVISTREAMHEADER_";
-        return typeName;
-    }
-
-    /**
      * Converts the namespace name to a Java package name.
      *
      * @param namespace the namespace
      * @return the Java package name
      */
     protected String toJavaPackageName(String namespace) {
-        var lowercaseNamespace = namespace.toLowerCase(Locale.ROOT);
-        if (generationContext.basePackage().isEmpty())
-            return lowercaseNamespace;
-        return generationContext.basePackage() + "." + lowercaseNamespace;
+        return JavaNaming.toJavaPackageName(generationContext.basePackage(), namespace);
     }
 
     /**
@@ -142,25 +124,6 @@ class JavaCodeWriter<T extends Type> {
     }
 
     /**
-     * Gets the Java type for the given primitive type.
-     *
-     * @param type the primitive type
-     * @return the name of the Java type
-     */
-    static String getPrimitiveJavaType(Primitive type) {
-        return switch (type.kind()) {
-            case PrimitiveKind.INT64, PrimitiveKind.UINT64, PrimitiveKind.INT_PTR, PrimitiveKind.UINT_PTR -> "long";
-            case PrimitiveKind.INT32, PrimitiveKind.UINT32 -> "int";
-            case PrimitiveKind.UINT16, PrimitiveKind.INT16, PrimitiveKind.CHAR -> "short";
-            case PrimitiveKind.BYTE, PrimitiveKind.SBYTE -> "byte";
-            case PrimitiveKind.SINGLE -> "float";
-            case PrimitiveKind.DOUBLE -> "double";
-            case PrimitiveKind.BOOL -> "boolean";
-            default -> throw new AssertionError("Unexpected primitive type: " + type.name());
-        };
-    }
-
-    /**
      * Gets a Java expression for the given integer constant value.
      *
      * @param javaType the resulting Java type
@@ -176,25 +139,6 @@ class JavaCodeWriter<T extends Type> {
             case "short" -> "(short) " + number.shortValue();
             case "byte" -> "(byte) " + number.byteValue();
             default -> throw new AssertionError("Unexpected value: " + javaType);
-        };
-    }
-
-    /**
-     * Gets the Java type for the given metadata type.
-     * <p>
-     * Type aliases are resolved. For enumerations, the base integer type
-     * is used. For non-primitive types, the result will be "MemorySegment".
-     * </p>
-     *
-     * @param type the metadata type
-     * @return the Java type
-     */
-    static String getJavaType(Type type) {
-        return switch (type) {
-            case Primitive primitive -> getPrimitiveJavaType(primitive);
-            case EnumType enumType -> getPrimitiveJavaType(enumType.baseType());
-            case TypeAlias typeAlias -> getJavaType(typeAlias.aliasedType());
-            default -> "MemorySegment";
         };
     }
 

@@ -9,6 +9,9 @@ package net.codecrete.windowsapi.writer;
 import net.codecrete.windowsapi.metadata.EnumType;
 import net.codecrete.windowsapi.metadata.Member;
 
+import static net.codecrete.windowsapi.naming.JavaNaming.getPrimitiveJavaType;
+import static net.codecrete.windowsapi.naming.JavaNaming.toJavaClassName;
+
 /**
  * Creates the Java code for enumerations.
  */

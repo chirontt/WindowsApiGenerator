@@ -23,6 +23,10 @@ import java.util.List;
 import java.util.Set;
 import java.util.regex.Pattern;
 
+import static net.codecrete.windowsapi.naming.JavaNaming.getJavaType;
+import static net.codecrete.windowsapi.naming.JavaNaming.getPrimitiveJavaType;
+import static net.codecrete.windowsapi.naming.JavaNaming.toJavaClassName;
+
 /**
  * Creates the Java code for a C structs and unions.
  */
